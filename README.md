@@ -30,7 +30,7 @@ pi-supervisor        # first start: press Enter to run the setup wizard
 
 The setup wizard maps the four model tiers to your models.
 
-`install` prints a WARNING if `~/.local/bin` is not on your `PATH`. To add it, run this, then open a new terminal (use `~/.bashrc` for bash):
+`install` ends by printing the commands to start, update and uninstall. It prints a WARNING if `~/.local/bin` is not on your `PATH`. To add it, run this, then open a new terminal (use `~/.bashrc` for bash):
 
 ```bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
@@ -204,12 +204,13 @@ Outside a project (see [Persistence And Memory](#persistence-and-memory)) nothin
 | Install | Where | Start it with |
 |---|---|---|
 | `./install` | Profile in `~/.config/pi-supervisor`, launcher in `~/.local/bin` | `pi-supervisor` |
-| `./install --profile <dir> --prefix <p>` | Profile in `<dir>`, launcher in `<p>/bin` | `pi-supervisor` |
+| `./install --profile <dir> --prefix <p>` | Profile in `<dir>`, launcher in `<p>/bin` | `pi-supervisor` (`<p>/bin/pi-supervisor` when `<p>/bin` is not on `PATH`) |
 | `pi install <clone>` | Plain pi's agent directory, no launcher (possible, not recommended) | plain `pi` |
 
 - Supervisor for Pi installs by default into a profile: a private pi agent directory (`~/.config/pi-supervisor`) with its own launcher, settings, packages, sessions, and `models.json`. `./install` registers the clone there as a pi package that pi loads in place, so keep the clone where it is. `pi-supervisor` starts Supervisor for Pi and plain `pi` stays plain pi.
-- By default the profile's `auth.json` is a link to plain pi's, so your existing logins work at once; the trade-off is that a `/login` or `/logout` in either one changes both. `--separate-login` gives the profile its own empty `auth.json` instead; run `/login` once inside `pi-supervisor`.
+- By default the profile's `auth.json` is a link to plain pi's, so your existing logins work at once; the trade-off is that a `/login` or `/logout` in either one changes both. `--separate-login` gives the profile its own `auth.json` instead; run `/login` once inside `pi-supervisor`. `--shared-login` switches back to the link.
 - `--profile <dir>` (default `~/.config/pi-supervisor`) puts the profile elsewhere; `--prefix <dir>` (default `~/.local`) puts the launcher in `<dir>/bin`.
+- `install` records these choices in `.install.conf` in the clone (one install per clone), and every later run and update reuses them, so you never repeat an option. A run that would change a recorded choice says what changes, including a login it would delete, and asks first.
 - With a direct `pi install <clone>` (possible, not recommended), plain `pi` becomes the supervisor in every session.
 
 Agents do not name models. Each agent has one of four tiers, and the setup wizard (`/supervisor-config`) maps each tier to a model of any provider pi has credentials for:
@@ -229,7 +230,7 @@ Providers come from pi: a `/login`, a provider API key in your environment (whic
 
 By default the `critic` that reviews a lead's result runs on its tier (`strong`), so the work and its review usually come from the same provider. You can run that one agent on a model from another provider instead, so the work and its review come from different model families with different blind spots. Only the critic changes: `scope-critic`, the leads and the workers stay on their tiers.
 
-It is off by default. The wizard offers it when two or more providers have credentials: say yes and pick a model from a provider other than the `top` tier's. That model then runs every `critic` dispatch; it is stored as `critic` in the configuration file. To change or remove it, run `/supervisor-config` again; `/supervisor-config status` shows the current critic model.
+It is off by default. The wizard offers it when two or more providers have credentials: pick a model from a provider other than the `top` tier's. That model then runs every `critic` dispatch; it is stored as `critic` in the configuration file. To change or remove it, run `/supervisor-config` again; `/supervisor-config status` shows the current critic model.
 
 ## Differences From Supervisor for Claude
 
@@ -253,12 +254,11 @@ In reading order:
 
 ## Maintaining An Install
 
-To update, pull the clone and re-run the installer, then restart `pi-supervisor`:
+To update, run one command, then restart `pi-supervisor`:
 
 ```bash
-cd pi-supervisor
-git pull
-./install                         # pass the same --prefix, --profile and --separate-login as before
+pi-supervisor update              # pulls the clone, installs again, updates the profile's packages
+pi update                         # pi itself, shared by pi and pi-supervisor
 ```
 
 Inside `pi-supervisor`:
@@ -271,20 +271,25 @@ Inside `pi-supervisor`:
 To remove the install:
 
 ```bash
-./install --uninstall             # asks you to type pi-supervisor; --yes skips the question
+pi-supervisor uninstall           # asks you to type pi-supervisor
+./install --uninstall             # the same, from the clone; --yes skips the question
 ```
 
-`--uninstall` takes the same `--prefix` and `--profile` you installed with. It removes the launcher and the whole profile directory, with its configuration, sessions and packages. A linked `auth.json` is unlinked, not followed, so your pi logins stay; plain `pi` and any external memory store are left alone. See [Update](docs/deploy.md#update), [Doctor Checks](docs/deploy.md#doctor-checks) and [Uninstall](docs/deploy.md#uninstall).
+Uninstall needs no options: it reads the recorded prefix and profile. It removes the launcher, the record and the whole profile directory, with its configuration, sessions and packages. A linked `auth.json` is unlinked, not followed, so your pi logins stay; plain `pi` and any external memory store are left alone. See [Update](docs/deploy.md#update), [Doctor Checks](docs/deploy.md#doctor-checks) and [Uninstall](docs/deploy.md#uninstall).
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
 | `pi-supervisor: command not found` | Add `~/.local/bin` (or `<prefix>/bin` for a `--prefix` install) to `PATH` |
-| `install: pi not found on PATH; install pi first` | Install pi, then re-run `./install` |
-| `exists and is not managed by pi-supervisor; not overwriting` | Move that file aside, or choose another `--prefix` |
-| `is a plain pi agent directory; choose another --profile` | Pass a `--profile` that is not `~/.pi/agent` or the directory in `PI_CODING_AGENT_DIR` |
+| `install: pi not found on PATH; install pi 1.5.2 or later first` | Install pi, then re-run `./install` |
+| `install: pi ... is older than 1.5.2` | Run `pi update`, then re-run `./install` |
+| `exists and is not managed by pi-supervisor` | Move that file aside, or choose another `--prefix` |
+| `is a plain pi agent directory; choose another` | Pass a `--profile` that is not `~/.pi/agent` or the directory in `PI_CODING_AGENT_DIR` |
 | `No models with credentials` (wizard) | Run `/login` inside `pi-supervisor`, or export a provider key such as `OPENAI_API_KEY`; restart `pi-supervisor`, then run `/supervisor-config` |
+| `install: not confirmed; nothing changed` | The run would have changed a recorded choice and was not confirmed. Re-run it and answer `y`, or pass `--yes` |
+| `git pull failed` during `pi-supervisor update` | Fix the clone (for example commit or stash local changes there), then run `pi-supervisor update` again |
+| `pi-supervisor: <clone> is missing` | The clone was moved or deleted. Clone the repository again and run `./install` there |
 | Status line `supervisor: top model ... has no credentials` | The supervisor stays off. `/login`, set the provider key, or remap the tier with `/supervisor-config`; `/supervisor-config doctor` names the fix |
 | Status line `<tier> has no credentials` | A dispatch to an agent of that tier fails. Fix it as above |
 | Doctor `WARN web tools` | Run `/supervisor-config` and accept the `pi-web-access` install; if it says "installed; active after /reload", run `/reload` |
