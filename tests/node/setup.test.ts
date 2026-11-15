@@ -116,6 +116,25 @@ test("wizard_writes_config: Accept, no critic, no web -> file, reload, persona o
 	assert.equal(r.unexpected.length, 0, JSON.stringify(r.unexpected));
 });
 
+test("wizard_summary_once: summary comes after the reload, once, not on later reloads or new sessions", { skip }, async () => {
+	const s = box();
+	rmSync(join(s.profile, "pi-supervisor.json"));
+	const r = rpc(s, "scripted/strong");
+	wizard(r, ["select", /Supervisor models/, { value: "Accept" }], ["confirm", /Web tools/, { confirmed: false }]);
+	await r.prompt("/supervisor-config");
+	const isSummary = (e: any) => e.method === "notify" && /Supervisor is on\. Top tier/.test(e.message);
+	await r.waitFor(isSummary);
+	const summaries = () => r.events.filter(isSummary).length;
+	const reloadAt = r.events.findIndex((e) => e.method === "setStatus" && /supervisor on/.test(e.statusText ?? ""));
+	assert.ok(reloadAt >= 0 && r.events.findIndex(isSummary) > reloadAt, "summary is shown after the reload redraw, not before");
+	assert.equal(summaries(), 1);
+	await r.prompt("/test-reload");
+	await r.request({ type: "new_session" });
+	await r.prompt("/test-reload");
+	assert.equal(summaries(), 1);
+	assert.equal(r.unexpected.length, 0, JSON.stringify(r.unexpected));
+});
+
 test("wizard_change_tier: Change fast -> pick standard -> file fast scripted/standard", { skip }, async () => {
 	const s = box();
 	rmSync(join(s.profile, "pi-supervisor.json"));

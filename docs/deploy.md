@@ -149,7 +149,7 @@ The supervisor overrides a tier per dispatch: `strong` for `writer` on short, lo
 3. **Critic model (optional).** A list, shown only when two or more providers have credentials; see [Critic Model](#critic-model).
 4. **Web tools (optional).** Shown when the `web_search` and `fetch_content` tools are not present. The wizard offers to install the third-party package `pi-web-access` (`npm:pi-web-access`), which provides both, into the `pi-supervisor` profile only. If the install fails, the wizard shows the error and goes on without it.
 5. **Subscription notice.** If a chosen model uses an Anthropic subscription login, the wizard shows pi's notice: a Claude subscription used through pi draws from extra usage and is billed per token, not from your plan limits. Manage it at https://claude.ai/settings/usage.
-6. **Finish.** The wizard writes the configuration file, shows `Supervisor is on. Top tier: <model>.` with the doctor report below it (see [Doctor Checks](#doctor-checks)), and reloads pi. The status line then reads `supervisor on · top <model>`.
+6. **Finish.** The wizard writes the configuration file, reloads pi, then shows `Supervisor is on. Top tier: <model>.` with the doctor report below it (see [Doctor Checks](#doctor-checks)), preceded by the `pi-web-access` install result when that step ran. The status line reads `supervisor on · top <model>`.
 
 Without the interactive TUI, `/supervisor-config` cannot run the wizard; write the configuration file by hand.
 

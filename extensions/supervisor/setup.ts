@@ -4,7 +4,7 @@ import { renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type Parse, type Tier, TIERS } from "./agents.ts";
 import { show } from "./commands.ts";
 import { formatChecks, runChecks } from "./doctor.ts";
@@ -29,6 +29,10 @@ const ROLES: Record<Tier, string> = {
 	standard: "executor, curator, other workers",
 	fast: "fixer, git-ops, scout",
 };
+// The closing summary is saved in the session and shown at the next session_start, after the reload
+// has redrawn the screen; a second entry marks it shown, so it appears once.
+const PENDING = "pi-supervisor-summary";
+const SHOWN = "pi-supervisor-summary-shown";
 const WEB_SOURCE = "npm:pi-web-access";
 export const NO_MODELS =
 	"No models with credentials. Log in with /login (for example a ChatGPT or Claude subscription) or set a provider key such as OPENAI_API_KEY, ANTHROPIC_API_KEY or GEMINI_API_KEY, restart pi-supervisor, then run /supervisor-config again.";
@@ -122,7 +126,17 @@ export function registerSetup(pi: ExtensionAPI, d: SetupDeps): void {
 		}
 	};
 
+	function deliver(ctx: ExtensionContext): void {
+		const entries = ctx.sessionManager.getEntries() as { type: string; customType?: string; data?: { text: string; level: "info" | "warning" } }[];
+		const at = (t: string) => entries.findLastIndex((x) => x.type === "custom" && x.customType === t);
+		const i = at(PENDING);
+		if (i < 0 || at(SHOWN) > i) return;
+		pi.appendEntry(SHOWN, {});
+		show(ctx, entries[i].data!.text, entries[i].data!.level);
+	}
+
 	pi.on("session_start", (e, ctx) => {
+		deliver(ctx);
 		if (e.reason !== "startup" || !ctx.hasUI || existsSync(file())) return;
 		ctx.ui.notify("Supervisor for Pi is not set up yet. Press Enter to choose its models.", "info");
 		ctx.ui.setEditorText("/supervisor-config");
@@ -200,11 +214,14 @@ export function registerSetup(pi: ExtensionAPI, d: SetupDeps): void {
 			critic = opts.find((o) => o.label === c)!.value;
 		}
 
+		let web = "";
+		let level: "info" | "warning" = "info";
 		if (!hasWeb()) {
 			const yes = await ui.confirm("Web tools", "Install pi-web-access for web_search and fetch_content? It goes into the pi-supervisor profile only.");
 			if (yes) {
 				const r = await installWeb((c, a) => pi.exec(c, a), d.invocation);
-				show(ctx, r.ok ? "Installed pi-web-access; it is active after the reload." : `pi-web-access did not install; setup goes on without it.\n${r.output}`, r.ok ? "info" : "warning");
+				web = (r.ok ? "Installed pi-web-access; it is active after the reload." : `pi-web-access did not install; setup goes on without it.\n${r.output}`) + "\n\n";
+				if (!r.ok) level = "warning";
 			}
 		}
 
@@ -221,9 +238,16 @@ export function registerSetup(pi: ExtensionAPI, d: SetupDeps): void {
 		writeConfig(d.agentDir(), { version: 1, tiers, critic });
 		// Finishing setup turns the persona on, also after /supervisor off.
 		if (!personaState(ctx.sessionManager.getEntries() as never).on) pi.appendEntry(ENTRY, { on: true });
-		// One notification: a second one right before the reload can hide the first.
-		show(ctx, `Supervisor is on. Top tier: ${tiers.top}.\n\n${doctor(ctx)}`);
-		await ctx.reload();
+		// The reload redraws the screen, so the summary is shown at the session_start after it.
+		pi.appendEntry(PENDING, { text: `${web}Supervisor is on. Top tier: ${tiers.top}.\n\n${doctor(ctx)}`, level });
+		try {
+			await ctx.reload();
+		} catch {
+			// The reload failed: show it now if ctx still works, else at this session's next start.
+			try {
+				deliver(ctx);
+			} catch {}
+		}
 	}
 
 	pi.registerCommand("supervisor-config", {
