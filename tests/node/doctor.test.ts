@@ -95,6 +95,8 @@ test("doctor_old_versions: old pi and old node -> FAIL", () => {
 		const cs = runChecks({ ...d, piVersion: "1.4.9", nodeVersion: "v22.18.1" });
 		assert.equal(find(cs, "pi version").level, "FAIL");
 		assert.equal(find(cs, "node version").level, "FAIL");
+		assert.match(find(cs, "pi version").detail, /run pi update/);
+		assert.match(find(cs, "node version").detail, /install Node 22\.19 or later/);
 	});
 });
 

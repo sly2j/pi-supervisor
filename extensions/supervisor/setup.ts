@@ -57,6 +57,15 @@ export function criticChoices(models: Model<Api>[], topProvider: string): Model<
 	return models.filter((m) => m.provider !== topProvider).sort(byPrice);
 }
 
+export const NO_CRITIC = "None: the critic agent uses its tier";
+
+// Critic picks: the current one first ("Keep"), then none, then the other providers' models.
+type Option = { label: string; value: string | null };
+export function criticOptions(models: Option[], current: string | null): Option[] {
+	const keep = current ? [{ label: `Keep ${current}`, value: current }] : [];
+	return [...keep, { label: NO_CRITIC, value: null }, ...models.filter((m) => m.value !== current)];
+}
+
 // Four lines (tier, model, price, roles) and a note when tiers share a model. A model that is not
 // among the available ones shows "(no credentials)" in place of its price.
 export function describeTiers(t: TierMap, models: Model<Api>[]): string {
@@ -178,16 +187,17 @@ export function registerSetup(pi: ExtensionAPI, d: SetupDeps): void {
 			tiers = { ...tiers, [tier]: ref(sorted[sorted.map(label).indexOf(m)]) };
 		}
 
-		let critic: string | null = null;
-		const top = parseModelRef(tiers.top);
-		const others = criticChoices(avail, top.provider);
+		// A re-run offers the current critic first; Escape cancels, as in every other step.
+		let critic = existing && !(existing instanceof Error) ? existing.critic : null;
+		const others = criticChoices(avail, parseModelRef(tiers.top).provider);
 		if (providers.length > 1 && others.length > 0) {
-			const yes = await ui.confirm("Critic model", "Review with a model from another provider than the top tier? A second model family catches different mistakes.");
-			if (yes) {
-				const c = await ui.select("Critic model", others.map(label));
-				if (c === undefined) return cancelled();
-				critic = ref(others[others.map(label).indexOf(c)]);
-			}
+			const opts = criticOptions(others.map((m) => ({ label: label(m), value: ref(m) })), critic);
+			const c = await ui.select(
+				"Critic model\nReview with a model from another provider than the top tier? A second model family catches different mistakes.",
+				opts.map((o) => o.label),
+			);
+			if (c === undefined) return cancelled();
+			critic = opts.find((o) => o.label === c)!.value;
 		}
 
 		if (!hasWeb()) {
@@ -211,8 +221,8 @@ export function registerSetup(pi: ExtensionAPI, d: SetupDeps): void {
 		writeConfig(d.agentDir(), { version: 1, tiers, critic });
 		// Finishing setup turns the persona on, also after /supervisor off.
 		if (!personaState(ctx.sessionManager.getEntries() as never).on) pi.appendEntry(ENTRY, { on: true });
-		show(ctx, doctor(ctx));
-		show(ctx, `Supervisor is on. Top tier: ${tiers.top}.`);
+		// One notification: a second one right before the reload can hide the first.
+		show(ctx, `Supervisor is on. Top tier: ${tiers.top}.\n\n${doctor(ctx)}`);
 		await ctx.reload();
 	}
 

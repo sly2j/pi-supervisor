@@ -4,7 +4,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { spawnSync } from "node:child_process";
-import { criticChoices, installWeb, proposeTiers } from "../../extensions/supervisor/setup.ts";
+import { criticChoices, criticOptions, installWeb, NO_CRITIC, proposeTiers } from "../../extensions/supervisor/setup.ts";
 import { PI, Sandbox } from "../fixtures/harness.ts";
 import { Rpc } from "../fixtures/rpc.ts";
 
@@ -70,6 +70,15 @@ test("critic_choices: two providers -> only the other provider's models, dearest
 	assert.deepEqual(criticChoices(ms, "a").map((m: any) => m.id), ["y", "x"]);
 });
 
+test("critic_options: first run -> none first; re-run -> keep current first, not listed twice", () => {
+	const ms = [{ label: "b/y  $3/$3 per M", value: "b/y" }, { label: "b/x  $1/$1 per M", value: "b/x" }];
+	assert.deepEqual(criticOptions(ms, null).map((o) => o.value), [null, "b/y", "b/x"]);
+	const re = criticOptions(ms, "b/x");
+	assert.deepEqual(re.map((o) => o.value), ["b/x", null, "b/y"]);
+	assert.equal(re[0].label, "Keep b/x");
+	assert.equal(re[1].label, NO_CRITIC);
+});
+
 test("no_models: no provider with credentials -> error notify with /login hint, no file", { skip }, async () => {
 	const s = box();
 	s.noModels();
@@ -102,8 +111,7 @@ test("wizard_writes_config: Accept, no critic, no web -> file, reload, persona o
 	});
 	await r.waitStatus(/supervisor on/);
 	const text = r.notifications().map((n) => n.message).join("\n");
-	assert.match(text, /0 FAIL/);
-	assert.match(text, /Supervisor is on\. Top tier: scripted\/top\./);
+	assert.match(text, /Supervisor is on\. Top tier: scripted\/top\.\n\n(.|\n)*0 FAIL/);
 	assert.equal((await r.state()).model.id, "top");
 	assert.equal(r.unexpected.length, 0, JSON.stringify(r.unexpected));
 });
@@ -167,4 +175,18 @@ test("wizard_after_off: /supervisor off, then setup -> persona on again", { skip
 	await r.prompt("/supervisor-config");
 	await r.waitStatus(/supervisor on/);
 	assert.equal((await r.state()).model.id, "top");
+});
+
+test("wizard_rerun_keeps_critic: second provider, Accept, default pick -> critic kept", { skip }, async () => {
+	const s = box({}, "anthropic/claude-haiku-4-5");
+	// A dummy key makes anthropic a second provider with credentials; nothing calls a model.
+	const r = new Rpc(s, { model: "scripted/strong", env: { ANTHROPIC_API_KEY: "dummy-test-key" } });
+	rpcs.push(r);
+	let opts: string[] = [];
+	wizard(r, ["select", /Supervisor models/, { value: "Accept" }], ["confirm", /Web tools/, { confirmed: false }]);
+	r.answer("select", /Critic model/, (req) => ((opts = req.options), { value: req.options[0] }));
+	await r.prompt("/supervisor-config");
+	assert.equal(opts[0], "Keep anthropic/claude-haiku-4-5");
+	assert.equal(cfg(s).critic, "anthropic/claude-haiku-4-5");
+	assert.equal(r.unexpected.length, 0, JSON.stringify(r.unexpected));
 });

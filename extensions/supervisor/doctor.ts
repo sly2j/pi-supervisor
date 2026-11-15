@@ -47,8 +47,8 @@ export function runChecks(d: DoctorDeps): Check[] {
 	const out: Check[] = [];
 	const add = (ok: boolean, name: string, pass: string, fail: string, bad: Check["level"] = "FAIL") =>
 		out.push({ level: ok ? "PASS" : bad, name, detail: ok ? pass : fail });
-	add(atLeast(d.piVersion, MIN_PI), "pi version", d.piVersion, `${d.piVersion} is older than ${MIN_PI.join(".")}`);
-	add(atLeast(d.nodeVersion, MIN_NODE), "node version", d.nodeVersion, `${d.nodeVersion} is older than ${MIN_NODE.join(".")}`);
+	add(atLeast(d.piVersion, MIN_PI), "pi version", d.piVersion, `${d.piVersion} is older than ${MIN_PI.join(".")}; run pi update, then restart pi-supervisor`);
+	add(atLeast(d.nodeVersion, MIN_NODE), "node version", d.nodeVersion, `${d.nodeVersion} is older than ${MIN_NODE.join(".")}; install Node ${MIN_NODE.join(".")} or later`);
 
 	const model = (name: string, ref: string) => {
 		const { provider, id } = parseModelRef(ref);

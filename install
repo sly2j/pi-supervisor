@@ -1,24 +1,32 @@
 #!/bin/sh
-# Install or update Supervisor for Pi: a pi profile plus the pi-supervisor launcher.
-# POSIX sh, no dependencies beyond pi. Run from a clone: ./install --help
+# Install, update or uninstall Supervisor for Pi: a pi profile plus the pi-supervisor launcher.
+# POSIX sh, no dependencies beyond pi (and git for --update). Run from a clone: ./install --help
 MARKER='# managed by pi-supervisor'
+MIN_PI=1.5.2
 
 usage() {
   cat <<'USAGE'
-Usage: ./install [--prefix DIR] [--profile DIR] [--separate-login]
+Usage: ./install [--prefix DIR] [--profile DIR] [--shared-login | --separate-login] [--yes]
+       ./install --update [--yes]
        ./install --uninstall [--prefix DIR] [--profile DIR] [--yes]
 
-Installs this clone as a pi package into its own profile (default
-~/.config/pi-supervisor) and writes the launcher <prefix>/bin/pi-supervisor
-(default prefix ~/.local). Plain pi and its agent directory are not touched.
-Re-running is the update step.
+Installs this clone as a pi package into its own profile and writes the
+launcher <prefix>/bin/pi-supervisor. Plain pi and its agent directory are not
+touched. Your choices are recorded in .install.conf in this clone and reused by
+every later run; give an option only to change one (it asks first).
+
+Once installed:
+  pi-supervisor update      pull this clone, re-install, update pi packages
+  pi-supervisor uninstall   remove the launcher and the profile
+(pi itself is still updated with: pi update)
 
   --prefix DIR       launcher goes to DIR/bin (default ~/.local)
   --profile DIR      profile directory (default ~/.config/pi-supervisor)
-  --separate-login   empty auth.json; run /login inside pi-supervisor
-                     (default: link auth.json to your pi logins)
-  --uninstall        remove the launcher and the profile (pi logins stay)
-  --yes              with --uninstall, skip the confirmation
+  --shared-login     link auth.json to your pi logins (default)
+  --separate-login   own auth.json; run /login inside pi-supervisor
+  --update           git pull this clone, then install again
+  --uninstall        remove the launcher, the profile and the record (pi logins stay)
+  --yes              do not ask for confirmation
   -h, --help         this help
 USAGE
 }
@@ -35,13 +43,22 @@ phys() {
   esac
 }
 
-prefix=$HOME/.local; profile=$HOME/.config/pi-supervisor
-separate=; uninstall=; yes=
+confirm() {
+  [ -n "$yes" ] && return 0
+  printf '%s [y/N] ' "$1"
+  read -r answer || answer=
+  case $answer in y|Y|yes|Yes|YES) return 0;; esac
+  return 1
+}
+
+prefix=; profile=; login=; uninstall=; update=; yes=
 while [ $# -gt 0 ]; do
   case $1 in
     --prefix) [ $# -ge 2 ] || die "--prefix needs a value"; prefix=$2; shift;;
     --profile) [ $# -ge 2 ] || die "--profile needs a value"; profile=$2; shift;;
-    --separate-login) separate=1;;
+    --shared-login) login=shared;;
+    --separate-login) login=separate;;
+    --update) update=1;;
     --uninstall) uninstall=1;;
     --yes) yes=1;;
     -h|--help) usage; exit 0;;
@@ -49,55 +66,118 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+[ -z "$update" ] || [ -z "$prefix$profile$login$uninstall" ] ||
+  die "--update takes no other options; it reuses the recorded ones"
+
+clone=$(cd "$(dirname "$0")" && pwd -P)
+
+if [ -n "$update" ]; then
+  command -v git >/dev/null 2>&1 || die "git not found on PATH; install git, or update $clone by hand and run ./install there"
+  [ -e "$clone/.git" ] || die "$clone is not a git clone; update its files by hand, then run ./install there"
+  echo "Updating $clone"
+  git -C "$clone" pull --ff-only ||
+    die "git pull failed in $clone; fix the clone there (for example commit or stash local changes), then run pi-supervisor update again"
+  exec sh "$clone/install" ${yes:+--yes}   # the pulled script does the install
+fi
+
+record=$clone/.install.conf   # git-ignored; one install per clone
+r_prefix=; r_profile=; r_login=
+if [ -f "$record" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case $line in
+      prefix=*) r_prefix=${line#prefix=};;
+      profile=*) r_profile=${line#profile=};;
+      login=*) r_login=${line#login=};;
+    esac
+  done < "$record"
+fi
 
 for d in "$prefix" "$profile"; do
   case /$d/ in */../*|*/./*) die "$d contains '.' or '..'; give a path without it";; esac
 done
-clone=$(cd "$(dirname "$0")" && pwd -P)
-prefix=$(phys "$prefix") || die "bad --prefix"
-profile=$(phys "$profile") || die "bad --profile"
+prefix=$(phys "${prefix:-${r_prefix:-$HOME/.local}}") || die "bad --prefix"
+profile=$(phys "${profile:-${r_profile:-$HOME/.config/pi-supervisor}}") || die "bad --profile"
 launcher=$prefix/bin/pi-supervisor
 default_dir=$(phys "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}")
 plain_dir=$(phys "$HOME/.pi/agent")
 
 [ "$profile" != "$default_dir" ] && [ "$profile" != "$plain_dir" ] ||
-  die "$profile is a plain pi agent directory; choose another --profile"
+  die "$profile is a plain pi agent directory; choose another, for example --profile ~/.config/pi-supervisor"
 [ "$profile" != / ] && [ "$profile" != "$HOME" ] || die "refusing profile $profile"
 
 has_marker() { [ -f "$1" ] && head -c 256 "$1" 2>/dev/null | grep -q "$MARKER"; }
 
 if [ -n "$uninstall" ]; then
-  if [ -z "$yes" ]; then
-    printf 'This deletes %s and the profile %s.\nType pi-supervisor to continue: ' "$launcher" "$profile"
-    read -r answer
-    [ "$answer" = pi-supervisor ] || die "not confirmed; nothing removed"
+  if [ ! -e "$launcher" ] && [ ! -L "$launcher" ] && [ ! -d "$profile" ]; then
+    echo "Nothing installed at $launcher or $profile."
+  else
+    if [ -z "$yes" ]; then
+      printf 'This deletes %s and the profile %s.\nType pi-supervisor to continue: ' "$launcher" "$profile"
+      read -r answer || answer=
+      [ "$answer" = pi-supervisor ] || die "not confirmed; nothing removed"
+    fi
+    if [ -e "$launcher" ] || [ -L "$launcher" ]; then
+      if has_marker "$launcher"; then rm -f "$launcher"; echo "removed $launcher"
+      else echo "kept $launcher (not managed by pi-supervisor)"; fi
+    fi
+    if [ -d "$profile" ]; then
+      [ -L "$profile/auth.json" ] && rm -f "$profile/auth.json"   # unlink, never follow
+      rm -rf "$profile"; echo "removed $profile"
+    fi
   fi
-  if [ -e "$launcher" ] || [ -L "$launcher" ]; then
-    if has_marker "$launcher"; then rm -f "$launcher"; echo "removed $launcher"
-    else echo "kept $launcher (not managed by pi-supervisor)"; fi
-  fi
-  if [ -d "$profile" ]; then
-    [ -L "$profile/auth.json" ] && rm -f "$profile/auth.json"   # unlink, never follow
-    rm -rf "$profile"; echo "removed $profile"
-  fi
+  [ "$profile" != "$r_profile" ] || rm -f "$record"
   echo "plain pi, its logins and the memory store are untouched"
   exit 0
 fi
 
-command -v pi >/dev/null 2>&1 || die "pi not found on PATH; install pi first"
+command -v pi >/dev/null 2>&1 || die "pi not found on PATH; install pi $MIN_PI or later first"
+v=$(pi --version 2>/dev/null | head -n 1)
+echo "$v" | awk -F. -v m="$MIN_PI" '{ split(m, b, "."); for (i = 1; i <= 3; i++) if ($i + 0 != b[i] + 0) exit ($i + 0 < b[i] + 0); exit 0 }' ||
+  die "pi ${v:-of unknown version} is older than $MIN_PI; run pi update, then run this again"
 if [ -e "$launcher" ] || [ -L "$launcher" ]; then
-  has_marker "$launcher" || die "$launcher exists and is not managed by pi-supervisor; not overwriting"
+  has_marker "$launcher" ||
+    die "$launcher exists and is not managed by pi-supervisor; move it away, or install the launcher elsewhere with --prefix DIR"
+fi
+
+# The login mode a previous run left in this profile: the record, else what auth.json is.
+auth=$profile/auth.json
+if [ "$profile" = "$r_profile" ] && [ -n "$r_login" ]; then was=$r_login
+elif [ -L "$auth" ]; then was=shared
+elif [ -e "$auth" ]; then was=separate
+else was=$r_login; fi   # a new profile keeps the recorded mode
+login=${login:-${was:-shared}}
+
+changes=
+change() { changes="$changes
+  $1"; }
+old=; [ -z "$r_prefix" ] || [ "$(phys "$r_prefix/bin")" = "$(phys "$prefix/bin")" ] || old=$r_prefix/bin/pi-supervisor
+[ -z "$old" ] || change "launcher: $old -> $launcher"
+[ -z "$r_profile" ] || [ "$profile" = "$r_profile" ] || change "profile: $r_profile -> $profile"
+q() { printf '%s' "$1" | sed "s/'/'\\\\''/g"; }
+qprofile=$(q "$profile"); qclone=$(q "$clone")
+# an existing launcher (from another clone, or before the record) keeps its profile unless confirmed
+if [ -f "$launcher" ] && { [ -z "$r_profile" ] || [ "$profile" = "$r_profile" ]; } &&
+   ! grep -Fqx "PI_CODING_AGENT_DIR='$qprofile'; export PI_CODING_AGENT_DIR" "$launcher"; then
+  change "launcher: $launcher starts another profile; it would start $profile"
+fi
+if [ -n "$was" ] && [ "$login" != "$was" ]; then
+  if [ "$login" = shared ]; then change "logins: separate -> shared (deletes the logins in $auth)"
+  else change "logins: shared -> separate (an empty $auth; run /login inside pi-supervisor)"; fi
+fi
+[ -w "$clone" ] || die "$clone is not writable; install records your choices there in .install.conf"
+if [ -n "$changes" ]; then
+  echo "This changes your recorded install:$changes"
+  confirm "Continue?" || die "not confirmed; nothing changed"
 fi
 
 umask 077
 mkdir -p "$profile" || die "cannot create $profile"
 chmod 700 "$profile"
 
-auth=$profile/auth.json
-if [ -n "$separate" ]; then
+if [ "$login" = separate ]; then
   if [ -L "$auth" ]; then rm -f "$auth"; fi
   [ -e "$auth" ] || echo '{}' > "$auth"
-  login="separate (run /login inside pi-supervisor)"
+  login_text="separate: $auth (run /login inside pi-supervisor)"
 else
   src=$default_dir/auth.json
   if [ ! -e "$src" ]; then mkdir -p "$default_dir"; echo '{}' > "$src"; chmod 600 "$src"; fi
@@ -105,18 +185,24 @@ else
     [ -L "$auth" ] && [ "$(readlink "$auth")" = "$src" ] || rm -f "$auth"
   fi
   [ -L "$auth" ] || ln -s "$src" "$auth"
-  login="linked to $src (a /login or /logout here also changes plain pi)"
+  login_text="linked to $src (a /login or /logout here also changes plain pi)"
 fi
 
 PI_CODING_AGENT_DIR=$profile; export PI_CODING_AGENT_DIR
 pi install "$clone" || die "pi install failed"
 
-qprofile=$(printf '%s' "$profile" | sed "s/'/'\\\\''/g")
 mkdir -p "$prefix/bin" || die "cannot create $prefix/bin"
 tmp=$launcher.tmp.$$
 cat > "$tmp" <<LAUNCHER
 #!/bin/sh
 $MARKER
+case "\$#:\$1" in
+  1:update|1:uninstall)
+    [ -f '$qclone/install' ] || { printf 'pi-supervisor: %s is missing; clone the repository again and run ./install there\n' '$qclone' >&2; exit 1; }
+    [ "\$1" = update ] || exec sh '$qclone/install' --uninstall --prefix '$(q "$prefix")' --profile '$qprofile'
+    sh '$qclone/install' --update || exit \$?
+    set -- update --extensions;;
+esac
 PI_CODING_AGENT_DIR='$qprofile'; export PI_CODING_AGENT_DIR
 command -v pi >/dev/null 2>&1 || { echo "pi-supervisor: pi not found on PATH" >&2; exit 127; }
 exec pi "\$@"
@@ -124,12 +210,25 @@ LAUNCHER
 [ $? -eq 0 ] || { rm -f "$tmp"; die "cannot write $launcher"; }
 chmod 755 "$tmp" && mv -f "$tmp" "$launcher" || { rm -f "$tmp"; die "cannot write $launcher"; }
 
+printf 'prefix=%s\nprofile=%s\nlogin=%s\n' "$prefix" "$profile" "$login" > "$record.tmp.$$" &&
+  mv -f "$record.tmp.$$" "$record" || { rm -f "$record.tmp.$$"; die "could not record your choices in $record"; }
+
 echo "Profile:  $profile"
-echo "Logins:   $login"
+echo "Logins:   $login_text"
 echo "Launcher: $launcher"
+echo "Recorded: $record (later runs reuse these choices)"
+[ -z "$r_profile" ] || [ "$profile" = "$r_profile" ] || echo "The previous profile $r_profile is left in place; delete it when you no longer need it."
+if [ -n "$old" ] && has_marker "$old"; then
+  rm -f "$old" && echo "removed the previous launcher $old" || echo "WARNING could not remove $old; delete it by hand"
+fi
+run=pi-supervisor
 case ":$PATH:" in
   *":$prefix/bin:"*) ;;
-  *) echo "WARNING $prefix/bin is not on your PATH; add this to your shell profile, then open a new terminal:"
+  *) run=$launcher
+     echo "WARNING $prefix/bin is not on your PATH; add this to your shell profile, then open a new terminal:"
      echo "  export PATH=\"$prefix/bin:\$PATH\"";;
 esac
-echo "Run pi-supervisor to start."
+echo
+echo "Start:     $run"
+echo "Update:    $run update"
+echo "Uninstall: $run uninstall"
