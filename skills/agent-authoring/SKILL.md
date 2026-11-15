@@ -14,8 +14,8 @@ description: Conventions for writing and reviewing agent and skill definitions i
 | Lead | executor | standard / default | all; preload `lead-loop` |
 | Lead | writer | top / default | all; preload `lead-loop`, `project-memory` |
 | Lead | planner | strong / default | all; preload `lead-loop`, `plan-writing` |
-| Worker | researcher-worker, planner-worker, executor-worker | standard / default | `excludeTools` includes `dispatch` |
-| Worker | writer-worker | strong / default | `excludeTools` includes `dispatch` |
+| Worker | researcher-worker, planner-worker, executor-worker | standard / default | explicit `tools` allowlist; no `dispatch` |
+| Worker | writer-worker | strong / default | explicit `tools` allowlist; no `dispatch` |
 | Review | critic | strong / default | read-only plus `bash`; no `dispatch` |
 | Review | scope-critic | top / default | read-only, no `bash`, no `dispatch` |
 | Memory | curator | standard / default | explicit allowlist; no `dispatch` |

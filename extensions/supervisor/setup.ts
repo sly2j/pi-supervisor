@@ -25,8 +25,8 @@ export type SetupDeps = {
 
 const ROLES: Record<Tier, string> = {
 	top: "supervisor, writer, scope-critic",
-	strong: "planner, researcher, critic",
-	standard: "executor, curator, workers",
+	strong: "planner, researcher, critic, writer-worker",
+	standard: "executor, curator, other workers",
 	fast: "fixer, git-ops, scout",
 };
 const WEB_SOURCE = "npm:pi-web-access";

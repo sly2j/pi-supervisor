@@ -1,4 +1,4 @@
-// /supervisor-doctor: readiness checks. Host-free; the host supplies everything through DoctorDeps.
+// /supervisor-config doctor: readiness checks. Host-free; the host supplies everything through DoctorDeps.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
