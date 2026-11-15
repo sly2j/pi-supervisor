@@ -1,0 +1,135 @@
+#!/bin/sh
+# Install or update Supervisor for Pi: a pi profile plus the pi-supervisor launcher.
+# POSIX sh, no dependencies beyond pi. Run from a clone: ./install --help
+MARKER='# managed by pi-supervisor'
+
+usage() {
+  cat <<'USAGE'
+Usage: ./install [--prefix DIR] [--profile DIR] [--separate-login]
+       ./install --uninstall [--prefix DIR] [--profile DIR] [--yes]
+
+Installs this clone as a pi package into its own profile (default
+~/.config/pi-supervisor) and writes the launcher <prefix>/bin/pi-supervisor
+(default prefix ~/.local). Plain pi and its agent directory are not touched.
+Re-running is the update step.
+
+  --prefix DIR       launcher goes to DIR/bin (default ~/.local)
+  --profile DIR      profile directory (default ~/.config/pi-supervisor)
+  --separate-login   empty auth.json; run /login inside pi-supervisor
+                     (default: link auth.json to your pi logins)
+  --uninstall        remove the launcher and the profile (pi logins stay)
+  --yes              with --uninstall, skip the confirmation
+  -h, --help         this help
+USAGE
+}
+
+die() { echo "install: $*" >&2; exit 1; }
+
+# physical path, also for a directory that does not exist yet
+phys() {
+  while [ "${1%/}" != "$1" ] && [ "$1" != / ]; do set -- "${1%/}"; done
+  if [ -d "$1" ]; then (cd "$1" && pwd -P); return; fi
+  case "$1" in
+    */*) p=$(phys "${1%/*}") || return 1; echo "${p%/}/${1##*/}";;
+    *) echo "$(pwd -P)/$1";;
+  esac
+}
+
+prefix=$HOME/.local; profile=$HOME/.config/pi-supervisor
+separate=; uninstall=; yes=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --prefix) [ $# -ge 2 ] || die "--prefix needs a value"; prefix=$2; shift;;
+    --profile) [ $# -ge 2 ] || die "--profile needs a value"; profile=$2; shift;;
+    --separate-login) separate=1;;
+    --uninstall) uninstall=1;;
+    --yes) yes=1;;
+    -h|--help) usage; exit 0;;
+    *) usage >&2; die "unknown argument $1";;
+  esac
+  shift
+done
+
+for d in "$prefix" "$profile"; do
+  case /$d/ in */../*|*/./*) die "$d contains '.' or '..'; give a path without it";; esac
+done
+clone=$(cd "$(dirname "$0")" && pwd -P)
+prefix=$(phys "$prefix") || die "bad --prefix"
+profile=$(phys "$profile") || die "bad --profile"
+launcher=$prefix/bin/pi-supervisor
+default_dir=$(phys "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}")
+plain_dir=$(phys "$HOME/.pi/agent")
+
+[ "$profile" != "$default_dir" ] && [ "$profile" != "$plain_dir" ] ||
+  die "$profile is a plain pi agent directory; choose another --profile"
+[ "$profile" != / ] && [ "$profile" != "$HOME" ] || die "refusing profile $profile"
+
+has_marker() { [ -f "$1" ] && head -c 256 "$1" 2>/dev/null | grep -q "$MARKER"; }
+
+if [ -n "$uninstall" ]; then
+  if [ -z "$yes" ]; then
+    printf 'This deletes %s and the profile %s.\nType pi-supervisor to continue: ' "$launcher" "$profile"
+    read -r answer
+    [ "$answer" = pi-supervisor ] || die "not confirmed; nothing removed"
+  fi
+  if [ -e "$launcher" ] || [ -L "$launcher" ]; then
+    if has_marker "$launcher"; then rm -f "$launcher"; echo "removed $launcher"
+    else echo "kept $launcher (not managed by pi-supervisor)"; fi
+  fi
+  if [ -d "$profile" ]; then
+    [ -L "$profile/auth.json" ] && rm -f "$profile/auth.json"   # unlink, never follow
+    rm -rf "$profile"; echo "removed $profile"
+  fi
+  echo "plain pi, its logins and the memory store are untouched"
+  exit 0
+fi
+
+command -v pi >/dev/null 2>&1 || die "pi not found on PATH; install pi first"
+if [ -e "$launcher" ] || [ -L "$launcher" ]; then
+  has_marker "$launcher" || die "$launcher exists and is not managed by pi-supervisor; not overwriting"
+fi
+
+umask 077
+mkdir -p "$profile" || die "cannot create $profile"
+chmod 700 "$profile"
+
+auth=$profile/auth.json
+if [ -n "$separate" ]; then
+  if [ -L "$auth" ]; then rm -f "$auth"; fi
+  [ -e "$auth" ] || echo '{}' > "$auth"
+  login="separate (run /login inside pi-supervisor)"
+else
+  src=$default_dir/auth.json
+  if [ ! -e "$src" ]; then mkdir -p "$default_dir"; echo '{}' > "$src"; chmod 600 "$src"; fi
+  if [ -e "$auth" ] || [ -L "$auth" ]; then
+    [ -L "$auth" ] && [ "$(readlink "$auth")" = "$src" ] || rm -f "$auth"
+  fi
+  [ -L "$auth" ] || ln -s "$src" "$auth"
+  login="linked to $src (a /login or /logout here also changes plain pi)"
+fi
+
+PI_CODING_AGENT_DIR=$profile; export PI_CODING_AGENT_DIR
+pi install "$clone" || die "pi install failed"
+
+qprofile=$(printf '%s' "$profile" | sed "s/'/'\\\\''/g")
+mkdir -p "$prefix/bin" || die "cannot create $prefix/bin"
+tmp=$launcher.tmp.$$
+cat > "$tmp" <<LAUNCHER
+#!/bin/sh
+$MARKER
+PI_CODING_AGENT_DIR='$qprofile'; export PI_CODING_AGENT_DIR
+command -v pi >/dev/null 2>&1 || { echo "pi-supervisor: pi not found on PATH" >&2; exit 127; }
+exec pi "\$@"
+LAUNCHER
+[ $? -eq 0 ] || { rm -f "$tmp"; die "cannot write $launcher"; }
+chmod 755 "$tmp" && mv -f "$tmp" "$launcher" || { rm -f "$tmp"; die "cannot write $launcher"; }
+
+echo "Profile:  $profile"
+echo "Logins:   $login"
+echo "Launcher: $launcher"
+case ":$PATH:" in
+  *":$prefix/bin:"*) ;;
+  *) echo "WARNING $prefix/bin is not on your PATH; add this to your shell profile, then open a new terminal:"
+     echo "  export PATH=\"$prefix/bin:\$PATH\"";;
+esac
+echo "Run pi-supervisor to start."
