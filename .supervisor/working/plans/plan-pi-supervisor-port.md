@@ -692,6 +692,8 @@ None here. The P6 model usage question is open question 1 of
 - 2026-11-15 P6 (stages A-D, C): routing 27/28 then 28/28 after one tuning round (agents/supervisor.md Path: minimal wording); e2e_mode2 pass; e2e_mode1 fail (researcher passed model standard to critic and scope-critic; research-file assertion conflicts with brief-named path and curator archive); 2.96 USD catalog, no stops; landed 32700e6, pushed
 - 2026-11-15 decision: e2e_mode1 stays strict on reviewer tiers and is fixed by wording, not a code guard; the research-file assertion is a test defect and is loosened; source: supervisor
 - 2026-11-15 P6: e2e_mode1 re-run pass after restoring the dispatch `model` "if omitted, own tier" sentence (0.27 USD); stage E TUI run passes steps 1-7, update and uninstall (0.07 USD); parity provisional pass, landed d5da2bd and pushed; deferred: owner checklist (owner action), closing-notification-after-reload follow-up (P2 UX, out of P6 scope)
+- 2026-11-15 lead: setup summary now shown once after the reload via a pending session entry delivered at session_start (a8d4b6a, pushed); deferred: nothing beyond a TUI check of the redraw and failed-reload behaviour
+- 2026-11-15 decision: the setup closing message being wiped by the reload is fixed now rather than left as a follow-up, as part of the user's request for an easy setup; source: supervisor
 
 ## Todo
 
