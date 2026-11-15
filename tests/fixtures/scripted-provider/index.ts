@@ -15,7 +15,12 @@ export default function (pi: ExtensionAPI) {
 	const faux = fauxProvider({
 		provider: "scripted",
 		api: "scripted",
-		models: ["top", "strong", "standard", "fast"].map((id) => ({ id })),
+		models: [
+			["top", 8],
+			["strong", 4],
+			["standard", 2],
+			["fast", 1],
+		].map(([id, p]) => ({ id: id as string, cost: { input: p as number, output: (p as number) * 5, cacheRead: 0, cacheWrite: 0 } })),
 	});
 	const reply = async (context: { messages: { role: string; content: unknown }[] }, options?: { signal?: AbortSignal }) => {
 		const msgs = context.messages;
@@ -45,6 +50,8 @@ export default function (pi: ExtensionAPI) {
 	};
 	faux.setResponses(Array.from({ length: 64 }, () => reply as never));
 	pi.registerProvider(faux.provider);
+	// Test only: the built-in /reload does not run through an RPC prompt.
+	pi.registerCommand("test-reload", { description: "Reload (test)", handler: async (_a, ctx) => void (await ctx.reload()) });
 	pi.on("before_agent_start", (e) => {
 		e.systemPromptOptions.appendSystemPrompt += "\nBEFORE-AGENT-START-MARKER";
 	});

@@ -59,7 +59,7 @@ ROUTING_SCOPE = {  # agent -> phrases its description must keep, so routing live
 SOURCE_LEFTOVERS = ["subagent_type", "disallowedTools", "CLAUDE_SKILL_DIR", "codex",
                     "fable", "opus", "sonnet", "haiku",
                     "WebSearch", "WebFetch", "Glob", "AskUserQuestion", "NotebookEdit",
-                    "harness attribution", "Supervisor for Claude", r"\.claude/", r"Agent\("]
+                    "harness attribution", "Supervisor for Claude", r"\.claude/", r"Agent\(", r"/clear\b"]
 MAX_LINE = 100
 
 

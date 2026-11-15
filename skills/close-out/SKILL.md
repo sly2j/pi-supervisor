@@ -1,13 +1,13 @@
 ---
 name: close-out
-description: Close out the session's work by tearing down residue, archiving finished plans and artifacts into the store, committing it, and saying whether /clear is safe. Use when the user runs `/close-out` or `/close-out retry`.
+description: Close out the session's work by tearing down residue, archiving finished plans and artifacts into the store, committing it, and saying whether /new is safe. Use when the user runs `/close-out` or `/close-out retry`.
 disable-model-invocation: true
 ---
 
 # Close out
 
 If a plan is still open (packages not `done`, or `## Todo` not complete), print the `Session state:`
-line as `not safe to /clear` with the reason, and stop. Otherwise run these steps in order.
+line as `not safe to /new` with the reason, and stop. Otherwise run these steps in order.
 
 1. Brief `fixer` `teardown`; `teardown retry` when the arguments after the skill block contain
    `retry`.
@@ -23,8 +23,8 @@ line as `not safe to /clear` with the reason, and stop. Otherwise run these step
 5. Print the last line, from what the agents reported:
 
 ```
-Session state: <closed out | wave N booked>; residue <removed | N failed>; store <committed | uncommitted | not stored>; safe to /clear, resume with "<prompt>"
+Session state: <closed out | wave N booked>; residue <removed | N failed>; store <committed | uncommitted | not stored>; safe to /new, resume with "<prompt>"
 ```
 
-or `Session state: <state>; not safe to /clear: <why>`. The resume prompt is `/pick-up <plan path>`
+or `Session state: <state>; not safe to /new: <why>`. The resume prompt is `/pick-up <plan path>`
 when a plan is live, else the next task.

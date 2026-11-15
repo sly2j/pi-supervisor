@@ -33,6 +33,20 @@ export class Sandbox {
 		writeFileSync(join(this.proj, "AGENTS.md"), "REPO-CONTEXT-MARKER\n");
 	}
 
+	// Copy the P2 stub agents, skills and web package over the package copy; extra files go in too.
+	overlay(...extra: [string, string][]) {
+		cpSync(join(FIXTURES, "p2", "agents"), join(this.pkg, "agents"), { recursive: true });
+		cpSync(join(FIXTURES, "p2", "skills"), join(this.pkg, "skills"), { recursive: true });
+		for (const [rel, text] of extra) writeFileSync(join(this.pkg, rel), text);
+	}
+
+	webStub = join(FIXTURES, "p2", "web-stub");
+
+	// The scripted provider and no credentials anywhere: nothing is available.
+	noModels() {
+		writeFileSync(join(this.profile, "settings.json"), JSON.stringify({ packages: [this.pkg] }));
+	}
+
 	config(tiers: Record<string, string | undefined>, critic: string | null = null) {
 		writeFileSync(join(this.profile, "pi-supervisor.json"), JSON.stringify({ version: 1, tiers, critic }));
 	}
@@ -52,14 +66,14 @@ export class Sandbox {
 
 	// Main session on the scripted top model; `script` is the JSON task the provider follows,
 	// or a raw prompt string.
-	start(script: object | string, extra: Record<string, string> = {}) {
-		const args = ["--mode", "json", "-p", "--session-dir", join(this.root, "main-sessions"), "--model", "scripted/top"];
+	start(script: object | string, extra: Record<string, string> = {}, model = "scripted/top") {
+		const args = ["--mode", "json", "-p", "--session-dir", join(this.root, "main-sessions"), "--model", model];
 		const prompt = typeof script === "string" ? script : `Task: ${JSON.stringify(script)}`;
 		return spawn(PI, [...args, prompt], { cwd: this.proj, env: this.env(extra), stdio: ["ignore", "pipe", "pipe"] });
 	}
 
-	run(script: object | string, extra: Record<string, string> = {}, timeoutMs = 60000): Promise<Run> {
-		const p = this.start(script, extra);
+	run(script: object | string, extra: Record<string, string> = {}, timeoutMs = 60000, model = "scripted/top"): Promise<Run> {
+		const p = this.start(script, extra, model);
 		let stdout = "";
 		let stderr = "";
 		p.stdout.on("data", (d) => (stdout += d));

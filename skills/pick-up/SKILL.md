@@ -1,6 +1,6 @@
 ---
 name: pick-up
-description: Re-enter a plan or program after /clear or a new session with one read-only state check, a short report, and a proposed next step, or pick tasks. Use when the user runs `/pick-up`, `/pick-up <plan path>` or `/pick-up <card>...`.
+description: Re-enter a plan or program after /new or a restart with one read-only state check, a short report, and a proposed next step, or pick tasks. Use when the user runs `/pick-up`, `/pick-up <plan path>` or `/pick-up <card>...`.
 disable-model-invocation: true
 ---
 

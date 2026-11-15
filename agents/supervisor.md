@@ -111,5 +111,5 @@ Mode 2 briefs are one to five lines: exact target, exact change, and how to veri
 - Steps only the user can run go last, in one `Run yourself:` block: shell commands verbatim,
   manual steps one line each.
 - End a close-out or a booked wave with `Session state: <closed out | wave N booked>; residue
-  <removed | N failed>; store <committed | uncommitted | not stored>; safe to /clear, resume with
-  "<prompt>"` or `Session state: <state>; not safe to /clear: <why>`.
+  <removed | N failed>; store <committed | uncommitted | not stored>; safe to /new, resume with
+  "<prompt>"` or `Session state: <state>; not safe to /new: <why>`.

@@ -20,7 +20,7 @@ MAX_LINE = 100
 LEFTOVERS = [r"subagent_type", r"disallowedTools", r"CLAUDE_SKILL_DIR", r"codex",
              r"fable", r"opus", r"sonnet", r"haiku"]
 SOURCE_ONLY = [r"CLAUDE\.local\.md", r"claude-supervisor", r"\.claude/", r"user-invocable",
-               r"argument-hint", r"context: fork", r"\$ARGUMENTS", r"Supervisor for Claude"]
+               r"argument-hint", r"context: fork", r"\$ARGUMENTS", r"Supervisor for Claude", r"/clear\b"]
 
 
 def frontmatter(path: Path) -> dict:

@@ -2,17 +2,20 @@
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type ExtensionAPI, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, getAgentDir, parseFrontmatter, VERSION } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { loadAgents } from "./agents.ts";
+import { registerCommands } from "./commands.ts";
 import { formatResults, killAll, MAX_TASKS, runTasks } from "./dispatch.ts";
+import { registerPersona } from "./persona.ts";
+import { registerSetup } from "./setup.ts";
 import { CONFIG_FILE, loadConfig } from "./tiers.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const DEPTH = Number(process.env.PI_SUPERVISOR_DEPTH ?? 0) || 0;
 
 // Run the child with the same runtime and pi entry script as this process.
-function invocation(args: string[]) {
+export function invocation(args: string[]) {
 	const script = process.argv[1];
 	if (script && existsSync(script)) return { command: process.execPath, args: [script, ...args] };
 	return { command: "pi", args };
@@ -31,6 +34,12 @@ const Params = Type.Object({
 
 export default function (pi: ExtensionAPI) {
 	pi.on("session_shutdown", () => killAll());
+	// Only the main session gets the persona and the commands; a child registers dispatch alone.
+	if (!process.env.PI_SUPERVISOR_AGENT) {
+		const persona = registerPersona(pi, ROOT, { agentDir: getAgentDir, parse: parseFrontmatter });
+		registerCommands(pi, { root: ROOT, agentDir: getAgentDir, parse: parseFrontmatter, depth: DEPTH, invocation });
+		registerSetup(pi, { root: ROOT, agentDir: getAgentDir, parse: parseFrontmatter, piVersion: VERSION, persona, invocation });
+	}
 	pi.registerTool({
 		name: "dispatch",
 		label: "Dispatch",
