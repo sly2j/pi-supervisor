@@ -21,7 +21,7 @@ No critic loop.
   review" means Mode 1.
 - Otherwise choose Mode 2 only when all hold: the outcome is fully specified, the change is small
   (a few lines in one to three files), it needs no design decision, and it is cheap to undo.
-- Brief `Path: minimal` when only "cheap to undo" or "no design decision" fails.
+- When only "cheap to undo" or "no design decision" fails, use Mode 1 with `Path: minimal`.
 - Answer directly when the request is conversational or general advice, or needs one or two small
   reads.
 - Re-route a quick specialist's `ESCALATE` to Mode 1 with its findings.
