@@ -169,7 +169,7 @@ User decisions 1-8 in the brief are binding and are restated under `## Scope Not
   instead of `--no-session`. Reason: the end-to-end checks in P6 read them as evidence of which
   children ran, and this directory stays out of the user's `/resume` list.
 - D16 Tests: `python3 -m pytest -q` for the pack lint and the memory script (direct ports of
-  the source tests), and `node --test tests/node/` for extension logic (Node 22.19 or later
+  the source tests), and `node --test` for extension logic (Node 22.19 or later
   strips types; no dev dependencies). Extension logic that needs testing lives in modules with
   type-only host imports; `loadAgents` takes the frontmatter parser as an argument, so tests
   pass a small stand-in and `index.ts` passes pi's.
@@ -182,8 +182,9 @@ User decisions 1-8 in the brief are binding and are restated under `## Scope Not
   conventions (pi reads it too). Versioning is the `package.json` `version` field: `0.x` during
   the port, `1.0.0` at parity sign-off; no `VERSION` file. License: Apache-2.0, as the source.
 - D19 Accepted differences: commit attribution is skill text only (`git-safety`); no bash
-  approval gate (brief default); a per-project install (`pi install -l`) is documented as
-  unsupported unless P1 shows children load it; the documented install is the launcher (D20).
+  approval gate (brief default); a project-local install (`pi install -l`) works only once the
+  project is trusted in the pi-supervisor profile (`defaultProjectTrust`), and is otherwise
+  unsupported; observed in P1; the documented install is the launcher (D20).
 - D20 Launcher and profile, mirroring `CS/deploy:115-170,272-292`. A POSIX `sh` script
   `install` at the repo root, run from a clone:
   - `./install [--prefix DIR] [--profile DIR] [--separate-login]`: creates the profile
@@ -421,7 +422,7 @@ slices in a child plan. Test cases and the checkpoint below are the package's ac
      - `child_provider_error: scripted provider returns an error, exit 0 -> error entry`
      - `child_sees_prompt: scripted provider echoes its system prompt -> contains the agent
        body, the skill body, and the repo context file`
-     - Checkpoint: `node --test tests/node/` passes.
+     - Checkpoint: `node --test` passes.
    - Slice 1b, nesting and guards. Units: `dispatch.ts`, `index.ts` (+ tests).
      - `nested: main -> stub lead -> stub worker and stub critic in one call -> lead result
        quotes both child texts`
@@ -433,7 +434,7 @@ slices in a child plan. Test cases and the checkpoint below are the package's ac
      - `child_profile: main under a temporary profile, nested -> lead, worker and critic each
        report the same getAgentDir() (a fixture extension writes it to a file), and no file
        appears under the fake default agent dir`
-     - Checkpoint: `node --test tests/node/` passes.
+     - Checkpoint: `node --test` passes.
    - Checklist of findings that bind later packages, recorded in the plan `## Log` during 1a
      and 1b: the scripted provider mechanism (D17); whether `before_agent_start` fires in
      print mode; whether a child loads a profile-installed package and a project-local one (D19);
@@ -462,7 +463,7 @@ slices in a child plan. Test cases and the checkpoint below are the package's ac
      `doctor_tier_not_ready ->
      failing check names the tier`; `close_out_command -> user message holds the skill block
      and the arguments`; `project_backup_command -> runs backup.sh, shows its output`.
-   - Checkpoint: `node --test tests/node/`; a manual wizard run in the TUI, steps 1-8 above.
+   - Checkpoint: `node --test`; a manual wizard run in the TUI, steps 1-8 above.
 5. P3 Agents port. Units: one per agent file group (leads, workers, reviewers, Mode 2 and
    curator, supervisor), plus `tests/test_agents_lint.py`.
    - Tests: the agent tests of `CS/tests/test_pack_lint.py` re-targeted to D12 keys:
@@ -500,7 +501,7 @@ slices in a child plan. Test cases and the checkpoint below are the package's ac
 ## Verification
 
 After P6 and P7, with a temporary profile and prefix: `./install --profile <tmp> --prefix <tmp>`,
-run the wizard through that launcher, then run `python3 -m pytest -q`, `node --test tests/node/`, the
+run the wizard through that launcher, then run `python3 -m pytest -q`, `node --test`, the
 opt-in routing test and the two end-to-end runs. Parity holds when every row of
 `docs/parity.md` is marked carried, adapted or dropped with a passing check or a stated reason,
 and the routing test passes at least 24 of 28 cases, with every failure listed (D24). Then
@@ -588,7 +589,7 @@ runs (two small tasks through real leads; expected 2 to 10 USD depending on the 
   dispatch}*.test.ts`, `tests/fixtures/`
 - Deps: P0
 - Stages: execute
-- Status: execute
+- Status: done
 - Artifacts: -
 
 ### P5: Memory tool
@@ -596,7 +597,7 @@ runs (two small tasks through real leads; expected 2 to 10 USD depending on the 
 - Owns: `skills/project-memory/scripts/memory`, `tests/test_memory.py`
 - Deps: P0
 - Stages: execute
-- Status: execute
+- Status: done
 - Artifacts: -
 
 ### P2: Setup, persona and commands
@@ -661,6 +662,10 @@ Waves: P0; then P1 and P5; then P2, P3 and P4; then P6 and P7.
 - 2026-11-15 decision: create the private GitHub repo `sly2j/pi-supervisor`, add it as `origin`, push `main` in P0 and after each landed package (D25); source: user
 - 2026-11-15 P0: done; repo bootstrapped (commit 901f575), install and launcher with 16 tests passing, private repo sly2j/pi-supervisor created and main pushed; deferred: none (commit trailer is Supervisor for Pi per D22, the brief said Claude trailer; plan Todo ticks left uncommitted)
 - 2026-11-15 decision: this repository's own commits use the trailer `Co-Authored-By: Supervisor for Pi` (D22 and the repo CLAUDE.md); commit 901f575 stands, no history rewrite; source: supervisor
+- 2026-11-15 P5: done; memory script and 24 tests landed (097b622) and pushed; the tests use a stub store-readme template, so P4 must ship `skills/project-memory/templates/store-readme.md`; deferred: none
+- 2026-11-15 P1: done; dispatch core landed (a6f9725, pushed); faux provider via extension works; before_agent_start fires in print mode; children load profile packages (project-local only when trusted in the profile); pi-web-access tools visible in children, no fix needed; unknown skill keys load silently; live nested run on openai-codex (gpt-5.6-luna lead, gpt-6-luna worker/critic) returned "worker: ZEBRA-41 / critic: CRITIC-OK", 7448 in/262 out tokens, about 0.0016 USD at catalog prices; deferred: CLAUDE.md test command fix (`node --test`), outside P1's files
+- 2026-11-15 decision: P1 deviations accepted: child sessions live under the parent's own session id; `dispatch` is registered at every depth and refuses at depth 2 or more; check command is `node --test`; source: supervisor
+- 2026-11-15 decision: pi's default tools are read, bash, edit, write, so P3 adds grep, find and ls explicitly to agents whose source had Grep or Glob; source: P1 finding
 
 ## Todo
 
@@ -669,13 +674,13 @@ Waves: P0; then P1 and P5; then P2, P3 and P4; then P6 and P7.
 - [x] P0: write `install` (D20, D21) and `tests/test_install.py`; tests pass
 - [x] P0: first commit with `.supervisor/`; `no_secrets` passes; `gh repo create
       sly2j/pi-supervisor --private`; add `origin`; push `main`
-- [ ] P1 1a: `agents.ts`, `tiers.ts`, `dispatch.ts`, `index.ts`, scripted-provider fixture;
+- [x] P1 1a: `agents.ts`, `tiers.ts`, `dispatch.ts`, `index.ts`, scripted-provider fixture;
       one restricted child end to end
-- [ ] P1 1b: nesting, depth cap, parallelism, abort, child sessions
-- [ ] P1 checklist: log the five findings; apply the D3 or D13 fallback if a finding requires it
-- [ ] P1 1b: `child_profile`
-- [ ] P1 1c: live nested run in the launcher's profile on `openai-codex` (D23); log the route
-- [ ] P5: port `CS/deploy:2140-2433` to `skills/project-memory/scripts/memory`; port the tests
+- [x] P1 1b: nesting, depth cap, parallelism, abort, child sessions
+- [x] P1 checklist: log the five findings; apply the D3 or D13 fallback if a finding requires it
+- [x] P1 1b: `child_profile`
+- [x] P1 1c: live nested run in the launcher's profile on `openai-codex` (D23); log the route
+- [x] P5: port `CS/deploy:2140-2433` to `skills/project-memory/scripts/memory`; port the tests
 - [ ] P2: child plan, then execute (wizard, persona, doctor, commands)
 - [ ] P3: copy and adapt 15 agents by D12; write `tests/test_agents_lint.py`
 - [ ] P4: copy and adapt 16 skills and their support files by D12; write
