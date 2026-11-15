@@ -3,7 +3,7 @@
 This is the source repo for Supervisor for Pi, a multi-agent orchestration layer for the pi coding harness, ported from claude-supervisor. It is a pi package run through its own `pi-supervisor` launcher and profile, so plain pi and other pi setups stay untouched.
 
 - Install from a clone with `./install` (see `./install --help`); it creates the profile `~/.config/pi-supervisor` and the launcher `~/.local/bin/pi-supervisor`. Re-running it is the update step.
-- Checks: `python3 -m pytest -q` (install script, pack lint, memory script) and `node --test tests/node/` (extension logic; Node 22.19 or later, no dev dependencies).
+- Checks: `python3 -m pytest -q` (install script, pack lint, memory script) and `node --test` (extension logic; Node 22.19 or later, no dev dependencies).
 - `install` must stay a POSIX `sh` script with no dependencies beyond pi.
 - Tests and smoke runs use temporary `--profile` and `--prefix` locations. Never write to `~/.pi/agent`, and never read, copy or commit any `auth.json` or other credential.
 - Versioning is the `package.json` `version` field: `0.x` during the port, `1.0.0` at parity sign-off. There is no `VERSION` file.
