@@ -1,97 +1,137 @@
 # Workflow Lifecycle
 
-This page describes what happens to a request, from routing to close-out. The rules are in
-`agents/supervisor.md` and the `lead-loop`, `plan-writing`, `repo-workflow` and `git-safety`
-skills; this is a summary.
+This page follows one piece of work from the first prompt to `/new`: what you type, what the supervisor answers, what sits on disk meanwhile, and when it is safe to clear the conversation and come back later. The pieces it ties together are described in [architecture.md](architecture.md) and [README](../README.md#how-it-works).
 
-## Routing
+## The Lifecycle And The Three Sizes
 
-You ask for what you want. The supervisor picks the path:
+Every piece of work walks the same path. You open with a request, add to it while agents run, answer questions or approve a plan when one is needed, and receive a result. You then close out: temporary artifacts are removed, what the project learned goes into memory, and finished plans are archived. The supervisor ends with a line that says whether you can `/new` and how to pick the work up again.
 
-| Situation | Path |
-|---|---|
-| Conversation, general advice, one or two small reads | The supervisor answers itself |
-| Fully specified, small (a few lines in one to three files), no design decision, cheap to undo | Mode 2: one specialist, `fixer`, `git-ops` or `scout`, with no review |
-| As above, except that it is not cheap to undo or needs a design decision | One lead, working alone, with a light review (`Path: minimal`) |
-| Everything else | Mode 1: a lead, with review |
+How much of that path a task uses depends on its size.
 
-You can override the choice: "quick" or "just do it" means Mode 2, and "full", "thorough" or
-"with review" means Mode 1. A specialist that finds the task larger than briefed hands it back,
-and the supervisor re-routes it to a lead.
+| Size | What runs | On disk meanwhile | At close-out |
+|---|---|---|---|
+| Small | One quick specialist or one lead, no plan file | Only the changed files | Test leftovers removed; memory updated only if there was something to record |
+| Medium | One lead with a plan or research file, then the work | The plan or research file in `.supervisor/working/`, a worktree for code changes | Leftovers removed, decisions recorded, plan and research archived |
+| Large | A program (a plan split into work packages), run in waves, often over several sessions | The parent plan with each package's state, child plans, worktrees | After each wave, leftovers of finished packages removed and the plan committed; at the end, full close-out |
 
-## Mode 1
+## Prompts And Answers
 
-The leads form a chain: `researcher`, then `planner`, then your approval of the plan, then
-`executor`. Stages that add nothing are skipped. A stated target or an obvious bug fix goes
-straight to `executor`; `planner` runs first only when the approach is open or the work spans
-modules with trade-offs. Prose goes to `writer`.
+The rows below generalize what users typed in real sessions. None of the prompts is a required form; the supervisor routes on intent.
 
-Each lead follows the same loop:
+**Open.** Say what you want, the constraints, and whether to push. "Fix the typo in README; push when done." "Check how install creates the profile, then start planning." On a small task the supervisor answers with a one-liner such as "Waiting on `fixer`". On a medium or large one it says which lead it dispatched.
 
-1. **Contract.** The lead writes down the goal, acceptance criteria, scope and constraints from
-   the supervisor's brief, and searches the memory store for entries on the task's paths and
-   topic.
-2. **Fan-out.** The lead does a single unit itself. Two or more independent units go to its
-   workers in parallel, usually up to six, with no two units writing the same file.
-3. **Review.** `critic` checks the result against the contract. `scope-critic` then rules on
-   the critic's findings and lists bloat to cut; it runs only when a finding is above the
-   lowest severity or the change is large.
-4. **Decide and iterate.** The lead fixes what both reviews support and rejects the rest with a
-   reason. Later rounds review only the changes. The loop ends when no blocking finding
-   remains, or after three rounds.
-5. **Report.** The lead returns a short report with paths to the full output.
+**Mid-course additions.** Type new facts or rules while agents run: "also remember that rule", "once done, commit and push". The supervisor folds them into the running work or relays them to the lead. Pushing is authorized this way, in the opening prompt, or by answering its question.
 
-The review depth is set per task: `full` (the default for design judgment), `light` (one critic
-round, for mechanical or well-specified work), or `none` (only when you ask for it).
+**Questions and plan approval.** Leads cannot ask you anything directly, so the supervisor collects their questions into one batch, each with a recommended answer. Reply "all as proposed", or correct the ones you disagree with; referring to them by number works: "1 yes, 3 use the shorter name". A plan comes back with its path, a summary and its open decisions; approve it, or answer with changes. Medium plans are approved once. A large program needs one approval of the parent plan; child plans come back only for major design decisions.
 
-Research is written to `.supervisor/working/research/research-<topic>.md` and plans to
-`.supervisor/working/plans/plan-<topic>.md`.
+**Result.** Every answer leads with the outcome. It then names who did what, what was validated, anything worth knowing, and a next step. For a small task that is often the whole exchange.
 
-## Plans and programs
+**Close-out.** Close-out does not start by itself: type `/close-out` when the work is done. If a plan is still open, it says so and stops. Otherwise it removes test leftovers, records what the work taught in the memory store, archives finished plans and research, finishes the work's task card (archives it), and commits the memory changes. If a removal was blocked, `/close-out retry` tries again (see [Temporary Artifacts](#temporary-artifacts)).
 
-A plan states decisions and an outline, not code. Its first version puts the open questions
-first. You can annotate a plan file and ask for another pass; the planner addresses every note
-and implements nothing.
+**End.** The answer closes with a state line:
 
-A plan with a `## Work Packages` section is a program. Each package has a goal, the files it
-owns, its dependencies, its stages and a status. The supervisor runs a program in waves: every
-package whose dependencies are done goes to the lead of its current stage, in parallel. After a
-wave, `fixer` updates the statuses and appends one log line per package to the plan. A lead's
-open question blocks its package until you answer.
+```
+Session state: <closed out | wave N booked>; residue <removed | N failed>; store <committed | uncommitted | not stored>; safe to /new, resume with "<prompt>"
+```
 
-## Git
+- The first field says where the work stands: `closed out`, or `wave N booked` in a program. A wave is booked when its results are written into the plan file and committed.
+- `residue` says whether test leftovers were removed, or how many removals failed.
+- `store` says whether the memory changes were committed, are still uncommitted, or have no store to go into (`not stored`, see [Without A Memory Store](#without-a-memory-store)).
 
-- `executor` works in a worktree at `.pi/worktrees/<slug>` on its own branch, and lands its
-  change set locally: rebase, squash, remove the worktree. Small Mode 2 edits stay in the
-  current checkout.
-- Nothing is pushed without your confirmation.
-- Destructive commands (force-push, `reset --hard`, `clean -fd`, branch and tag deletion,
-  dropping a stash, rewriting published history, `--no-verify`) need your explicit request.
-- Commits end with `Co-Authored-By: Supervisor for Pi` and carry no other attribution.
-- Version bumps are off until you opt in for a repo; the rule is then recorded in its
-  `AGENTS.md` or `CLAUDE.md`.
+When stopping would lose something, the line reads instead:
 
-pi has no permission prompt for shell commands, so these are rules the agents follow, not
-limits that pi enforces.
+```
+Session state: <state>; not safe to /new: <why>
+```
 
-## Ending and resuming a session
+The resume prompt is `/pick-up <plan path>` when a plan is live, otherwise a sentence stating the next task. In a program the line also appears after every booked wave, not only at the end. If it is missing, ask for it.
 
-A long session's context grows; the design expects you to start fresh ones. Plans and the
-memory store hold the state, so little is lost.
+| Step | You type | The supervisor answers |
+|---|---|---|
+| Open | The task, constraints, push authorization | One-liner, or the dispatched lead |
+| Add-ons | New facts or rules, any time | Folded in or relayed |
+| Questions | "all as proposed", or numbers | The re-run stage, or the next question batch |
+| Plan approval | "approved", or changes | Execution starts; progress per wave in a program |
+| Result | Usually nothing; "ship it", "commit and push" | Outcome, who did what, validation, next step |
+| Close-out | `/close-out` | Recorded and archived entries, `Run yourself:` if anything is left, the state line |
 
-- `/close-out` finishes the session's work: it removes recorded test residue, has `curator`
-  distil a finished plan into memory entries and archive it, and commits a tracked store. It refuses
-  while a plan is still open. `/close-out retry` repeats a failed residue removal.
-- The supervisor ends a close-out, and each booked wave of a program, with a `Session state:`
-  line that says whether it is safe to start a new session and gives the prompt to resume with.
-- `/new` starts a fresh session. It is pi's session reset; pi has no `/clear`.
-- `/pick-up` in the new session checks the state of the plan and proposes the next step:
-  the next wave, an `executor` run, or `/close-out`. `/pick-up <plan path>` names the plan.
-  Without a plan it lists the open task cards, and `/pick-up <card>...` claims them.
+## Example: A Medium Task
 
-Steps that only you can run are listed at the end of an answer in a `Run yourself:` block.
+An illustrative exchange, shortened. The `Session state:` line is the exact format; the rest is typical wording.
 
-## Without a memory store
+```
+You:        the export script should take --json. Plan it, then build it; push when done.
+Supervisor: Dispatched planner.
+Supervisor: Plan: .supervisor/working/plans/plan-export-json.md. Add a --json flag
+            next to the CSV writer, with a test. Questions:
+            1. Write JSON to stdout unless --output is given? Recommended: yes.
+            2. Keep CSV as the default? Recommended: yes.
+You:        1 yes, 2 as proposed. Approved.
+Supervisor: Plan updated with your answers and approved. Next: executor on both items.
+You:        /new
+You:        /pick-up .supervisor/working/plans/plan-export-json.md
+Supervisor: Plan approved, two open items, no pending questions. Next: executor on both. Go?
+You:        go
+Supervisor: Done: the export script takes --json; CSV stays the default.
+            executor made the change in a worktree, tests pass, pushed to origin.
+You:        /close-out
+Supervisor: Recorded 1 decision; archived the plan.
+            Session state: closed out; residue removed; store committed; safe to /new, resume with "document --json in the README"
+You:        /new
+```
 
-Outside a project nothing is persisted: no store, no worktree and no version bump. Plans are
-written to the current directory. See [memory.md](memory.md#projects-and-one-offs).
+## Temporary Artifacts
+
+- **Worktrees.** Code changes run in a worktree under `.pi/worktrees/`. The agent that lands the change removes it.
+- **Residue.** Residue is what tests leave behind: temporary directories, config files, tmux sockets, venvs, background processes, files on ssh hosts. Each item is listed in the residue ledger, `.supervisor/working/residue/`, which git ignores, and removed at the end of the work (in a program, after each wave for the packages that are done). You see only the items that could not be removed.
+- **Plans and research.** They stay in `.supervisor/working/` while the work is open, and `curator` moves them to `.supervisor/archive/working/` at close-out.
+
+**A failed removal.** Teardown refuses some removals, for example one that targets your home directory or the project root, or that uses `sudo`, and a removal fails when its check still finds the item afterwards. The item then stays in the ledger, and its `remove` command appears in the `Run yourself:` block described next. Run that command yourself, then `/close-out retry`: it runs every listed removal again, checks that each item is gone, and drops it from the ledger.
+
+## Run Yourself
+
+Some steps only you can run: a push you did not authorize, a removal teardown refused, a step in an account or UI. The supervisor collects them in one block at the end of its answer, headed `Run yourself:`. Shell commands appear verbatim in a fenced block; manual steps take one line each.
+
+````
+Run yourself:
+```
+rm -rf /tmp/tmp.k3Jd9Q/sup-3fa9c1-build
+```
+Drag the figures into the pull request description.
+````
+
+Everything you need to do is in that block. A push is not on the list when you authorized it: in the opening prompt, in a message while agents were running, or by answering "push to origin?". Agents always run authorized pushes; you run only the ones you held back.
+
+## Clearing And Compacting
+
+`/new` ends the conversation and starts a new session. Everything on disk survives: the memory store, plans and research in `.supervisor/working/`, the residue ledger, worktrees and branches, and git history. These do not survive:
+
+- the conversation itself, including a finished step whose result is not yet written into the plan file (the state line says `not safe to /new` then);
+- an unanswered batch of questions, and any `not stored:` note (see [Without A Memory Store](#without-a-memory-store)) or lesson proposal you have not answered;
+- results from agents still running.
+
+The cheapest places to clear, in order:
+
+1. **After close-out and its commit.** All state is on disk or archived.
+2. **After a booked wave in a program.** The plan file holds everything the next session needs; nothing is waiting on your answer.
+3. **After plan approval, once the plan is on disk.** Start the new session with `/pick-up <plan path>`, or `/pick-up` to find it.
+
+The `Session state:` line is the signal: it says `safe to /new` or `not safe to /new` with the reason.
+
+`/compact` summarizes the conversation inside the same session; `/new` empties it. A long session degrades before it runs out of room, and a summary carries the old context's momentum forward (see [context engineering](context-engineering.md#the-problem)); at a safe point, prefer `/new` and `/pick-up`. Reserve `/compact` for mid-wave moments where clearing would lose something.
+
+## Resuming
+
+`/pick-up [<plan path> | <card>...]` rebuilds your place from the plan file. It reads the plan you name, or finds the live one in `.supervisor/working/plans/`, and reports in at most ten lines: the plan, its packages or open items, the last log lines and any pending questions. It then proposes the next step and waits for your go: the next wave for a program, `executor` on the open parts of a flat plan, or `/close-out` when the work is finished. With no live plan it lists open tasks, claims the cards you pick (quick fixes aside) and routes them as the same request typed in.
+
+With no plan file, as in a small task, state the task in a sentence, as the state line's resume prompt does.
+
+## Without A Memory Store
+
+A directory is a project when it is inside a git repository, or when it or a directory above it holds `.supervisor/`, `.pi/`, `AGENTS.md` or `CLAUDE.md`; your home directory and what is above it never count. Anywhere else is a one-off: nothing is persisted and you are not asked. Anything an agent would have stored is reported once, as `not stored: no project store here; say *remember* to keep it`.
+
+There is no residue ledger either: agents remove what they made and list in their report anything they could not remove. The state line reads `store not stored`, and after `/new` there is no plan to pick up.
+
+To make the directory a project, say "remember ...", "make this a project", or run `/close-out`, which creates the store. To end a one-off without storing anything, `/new`.
+
+<!-- Maintainers: this page quotes wording from the package (the state line, the `Run yourself:` block, `/close-out` and `/pick-up`); update it when that wording changes. -->
