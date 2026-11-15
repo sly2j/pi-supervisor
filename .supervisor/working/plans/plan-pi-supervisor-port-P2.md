@@ -367,9 +367,9 @@ None for the user. Amendments to the parent: `## Scope Notes`, "Amend parent".
 
 ## Todo
 
-- [ ] S1: `persona.ts`, `index.ts` wiring, `tests/fixtures/rpc.ts`, overlay agents; persona tests pass
-- [ ] S2: `doctor.ts`, `/supervisor-config status|doctor`; doctor tests pass
-- [ ] S3: wizard, first-start offer, `installWeb`, scripted prices, web stub; setup tests pass
-- [ ] S4: `commands.ts`, overlay skills and stub `backup.sh`; command tests pass
-- [ ] S4: `/clear` to `/new` (P2-D14) in the three files and both lint lists; `skills_load_clean`
+- [x] S1: `persona.ts`, `index.ts` wiring, `tests/fixtures/rpc.ts`, overlay agents; persona tests pass
+- [x] S2: `doctor.ts`, `/supervisor-config status|doctor`; doctor tests pass
+- [x] S3: wizard, first-start offer, `installWeb`, scripted prices, web stub; setup tests pass
+- [x] S4: `commands.ts`, overlay skills and stub `backup.sh`; command tests pass
+- [x] S4: `/clear` to `/new` (P2-D14) in the three files and both lint lists; `skills_load_clean`
 - [ ] Verification: manual TUI run under a temporary profile; uninstall it

@@ -37,7 +37,8 @@ process (`--mode json -p`), resolving the agent's tier to a `provider/id` from a
 written by a setup wizard. The same extension, loaded inside a child, reads two environment
 variables to learn which agent it is and how deep it runs, and refuses to dispatch at depth 2.
 In the main session it appends the supervisor
-persona to the system prompt, selects the `top`-tier model and removes `bash`. Agent and skill text is copied from `CS/pack`
+persona to the system prompt, selects the `top`-tier model and sets the active tools to the
+`tools` list of `agents/supervisor.md`, which has no `bash`. Agent and skill text is copied from `CS/pack`
 and adapted by a fixed translation table (D12).
 
 Isolation follows the source's launcher (D20): an `install` script in the repo creates a
@@ -231,8 +232,8 @@ User decisions 1-8 in the brief are binding and are restated under `## Scope Not
   (`PI/../pi-ai/dist/providers/openai.js:12-19`), but none is stored, so `openai/<id>` uses
   `OPENAI_API_KEY`. The P1 slice 1c config
   maps the tiers to `openai-codex/<id>` models (from `pi-supervisor --list-models codex`,
-  cheapest first) and checks `pi-supervisor auth check --provider openai-codex --json` is
-  `ready` in the profile first; if not, it falls back to `openai/<id>` and logs the route with
+  cheapest first) and checks in the session's model registry that `openai-codex` models
+  have credentials first; if not, it falls back to `openai/<id>` and logs the route with
   its `auth check` `authType`. Each child result's model id shows the route.
 - D24 Routing-test pass bar: sign-off at 24 of 28 or better; the target is 28 of 28. Every
   failing case is listed in `docs/parity.md` with a prompt-tuning follow-up (user, 2026-11-15).
@@ -606,7 +607,7 @@ runs (two small tasks through real leads; expected 2 to 10 USD depending on the 
 - Owns: `extensions/supervisor/{setup,persona,doctor,commands}.ts`, their `tests/node/` files, `extensions/supervisor/index.ts`, `tests/node/skills.real.test.ts`, `tests/fixtures/rpc.ts`, `tests/fixtures/p2/`, `tests/fixtures/harness.ts`, `tests/fixtures/scripted-provider/index.ts`, and the P2-D14 lines in `skills/close-out/SKILL.md`, `skills/pick-up/SKILL.md`, `agents/supervisor.md`, `tests/test_skills_lint.py`, `tests/test_agents_lint.py`
 - Deps: P1
 - Stages: plan, execute
-- Status: execute
+- Status: done
 - Artifacts: `.supervisor/working/plans/plan-pi-supervisor-port-P2.md`
 
 ### P3: Agents port
@@ -671,6 +672,8 @@ Waves: P0; then P1 and P5; then P2, P3 and P4; then P6 and P7.
 - 2026-11-15 P2: plan done, child plan plan-pi-supervisor-port-P2.md (4 slices, critic PASS round 2); includes /clear -> /new (P2-D14) and six Amend parent items listed in its Scope Notes; deferred: none
 - 2026-11-15 decision: P3 uses explicit `tools` allowlists for every agent instead of exclude lists, so grep, find and ls are kept; source: P3 finding, accepted by supervisor
 - 2026-11-15 decision: pi's session reset is `/new`; "safe to /clear" wording becomes "safe to /new" in P2 slice 4, which also takes the skill-warning check P4 skipped; source: P2 plan
+- 2026-11-15 P2: done, `2e34f58` pushed to origin/main; 71 node and 244 pytest checks pass; deferred: manual TUI verification run (TUI reload, real `pi-web-access` install, Anthropic OAuth notice)
+- 2026-11-15 decision: P2 deviations accepted: persona refreshes the model registry once when `top` shows no credentials at session start; Escape on a confirm counts as "no"; re-running the wizard re-asks the critic question; the wizard turns the persona on before reload; `/project-backup` runs the script with bash; source: supervisor
 
 ## Todo
 
@@ -686,7 +689,7 @@ Waves: P0; then P1 and P5; then P2, P3 and P4; then P6 and P7.
 - [x] P1 1b: `child_profile`
 - [x] P1 1c: live nested run in the launcher's profile on `openai-codex` (D23); log the route
 - [x] P5: port `CS/deploy:2140-2433` to `skills/project-memory/scripts/memory`; port the tests
-- [ ] P2: child plan, then execute (wizard, persona, doctor, commands)
+- [x] P2: child plan, then execute (wizard, persona, doctor, commands)
 - [x] P3: copy and adapt 15 agents by D12; write `tests/test_agents_lint.py`
 - [x] P4: copy and adapt 16 skills and their support files by D12; write
       `tests/test_skills_lint.py`
