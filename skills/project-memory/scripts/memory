@@ -1,0 +1,355 @@
+#!/usr/bin/env python3
+"""Keep a project's `.supervisor/` store outside its checkout: externalize, link, status.
+
+Stdlib only. Run inside a project checkout (or a linked worktree for `link` and `status`).
+"""
+
+import argparse
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+NAME = "pi-supervisor"
+MEMORY_ITEMS = ((".supervisor", True),)  # (name, is_dir)
+MEMORY_EXCLUDES = tuple("/" + name for name, _ in MEMORY_ITEMS)
+RESIDUE_IGNORE = ".supervisor/working/residue/"
+MEMORY_MARKER = "<!-- pi-supervisor memory: rewritten on every run -->"
+TEMPLATE = Path(__file__).resolve().parent.parent / "templates" / "store-readme.md"
+
+
+class MemoryErr(Exception):
+    """Expected failure: printed without a traceback, exit code 2."""
+
+
+def sh_quote(value: str) -> str:
+    return "'%s'" % value.replace("'", "'\"'\"'")
+
+
+def git_remote(source: Path) -> Optional[str]:
+    """The checkout's `origin` URL without http(s) credentials, or None."""
+    import urllib.parse
+    try:
+        out = subprocess.run(["git", "-C", str(source), "remote", "get-url", "origin"],
+                             capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    url = (out.stdout.strip() or None) if out.returncode == 0 else None
+    parts = urllib.parse.urlsplit(url) if url else None
+    if parts and parts.scheme in ("http", "https") and "@" in parts.netloc:
+        url = urllib.parse.urlunsplit(parts._replace(netloc=parts.netloc.rpartition("@")[2]))
+    return url
+
+
+def memory_root(args: argparse.Namespace) -> Path:
+    """The directory holding one subdirectory per project: --root, else the environment, else the XDG data dir."""
+    root = getattr(args, "root", None) or os.environ.get("PI_SUPERVISOR_MEMORY_ROOT")
+    if not root:
+        data = os.environ.get("XDG_DATA_HOME") or "~/.local/share"
+        root = os.path.join(data, NAME, "memory")
+    return Path(root).expanduser().resolve()
+
+
+def memory_git(cwd: Path, *argv: str) -> Optional[str]:
+    """Stdout of `git -C cwd <argv>` (not stripped), or None when it fails or git is missing."""
+    try:
+        out = subprocess.run(["git", "-C", str(cwd)] + list(argv), capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout if out.returncode == 0 else None
+
+
+def memory_project(cwd: Path) -> Tuple[Path, Optional[Path]]:
+    """(main toplevel, this worktree's toplevel when cwd is in a linked worktree, else None)."""
+    out = memory_git(cwd, "rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir")
+    lines = out.splitlines() if out else []
+    if len(lines) != 3:
+        raise MemoryErr("not a git repository: %s; run this inside a project checkout" % cwd)
+    top, gdir, common = [(cwd / ln).resolve() for ln in lines]
+    if gdir == common:
+        return top, None
+    if common.name != ".git":
+        raise MemoryErr("cannot find the main checkout of this worktree (git dir %s)" % common)
+    return common.parent, top
+
+
+def memory_name(toplevel: Path, override: Optional[str]) -> str:
+    """The per-project directory name: --name, else the origin URL's basename, else the toplevel's basename."""
+    if override is None:
+        url = git_remote(toplevel)
+        base = re.split(r"[/:]", url.rstrip("/"))[-1] if url else ""
+        if base.endswith(".git"):
+            base = base[:-4]
+        name = base or toplevel.name
+    else:
+        name = override
+    if not name or "/" in name or name in (".", ".."):
+        raise MemoryErr("invalid project name %r; pass --name with a plain directory name" % name)
+    return name
+
+
+def memory_link_state(path: Path, expected: Path) -> str:
+    """absent, real, expected (a link to `expected`) or other (any other link, dangling included)."""
+    if path.is_symlink():
+        target = Path(os.readlink(str(path)))
+        if not target.is_absolute():
+            target = path.parent / target
+        return "expected" if os.path.realpath(str(target)) == os.path.realpath(str(expected)) else "other"
+    return "real" if path.exists() else "absent"
+
+
+def memory_excludes(main: Path) -> Path:
+    out = memory_git(main, "rev-parse", "--git-path", "info/exclude")
+    if not out or not out.strip():
+        raise MemoryErr("cannot find info/exclude of %s" % main)
+    return (main / out.strip()).resolve()
+
+
+def memory_exclude_lines(path: Path) -> List[str]:
+    try:
+        return [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines()]
+    except OSError:
+        return []
+
+
+def memory_append_lines(path: Path, lines: List[str]) -> None:
+    """Append `lines` to the text file `path`, creating it (and its directory) when absent."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    if text and not text.endswith("\n"):
+        text += "\n"
+    path.write_text(text + "".join(ln + "\n" for ln in lines), encoding="utf-8")
+
+
+def memory_readme(toplevel: Path, external: Path) -> str:
+    origin = git_remote(toplevel) or "none"
+    restore = "\n".join("    mv %s %s" % (sh_quote(str(external / n)), sh_quote(str(toplevel / n)))
+                        for n, _ in MEMORY_ITEMS)
+    return ("%s\n\n# Project memory\n\n"
+            "This directory holds the `.supervisor/` store of one project. The project "
+            "checkout links to it and excludes the link through `.git/info/exclude`. Manage it with "
+            "`/supervisor-memory`.\n\n"
+            "project: %s\norigin: %s\n\n"
+            "To move the memory back into the project, remove the link there, then run:\n\n%s\n"
+            % (MEMORY_MARKER, toplevel, origin, restore))
+
+
+def memory_attach(toplevel: Path, external: Path, template: Path) -> None:
+    """Shared tail of externalize and link: excludes, external README, .gitignore, store README."""
+    exclude = memory_excludes(toplevel)
+    have = memory_exclude_lines(exclude)
+    missing = [ln for ln in MEMORY_EXCLUDES if ln not in have]
+    if missing:
+        memory_append_lines(exclude, missing)
+        for ln in missing:
+            print("excluded: %s in %s" % (ln, exclude))
+    readme = external / "README.md"
+    want = memory_readme(toplevel, external)
+    old = readme.read_text(encoding="utf-8") if readme.exists() else None
+    if old != want:
+        readme.write_text(want, encoding="utf-8")
+        print("%s README.md: %s" % ("created" if old is None else "refreshed", readme))
+    ignore = external / ".gitignore"
+    if RESIDUE_IGNORE not in memory_exclude_lines(ignore):
+        memory_append_lines(ignore, [RESIDUE_IGNORE])
+        print("ignored: %s in %s" % (RESIDUE_IGNORE, ignore))
+    store_readme = external / ".supervisor" / "README.md"
+    text = template.read_text(encoding="utf-8")
+    if not store_readme.exists() or store_readme.read_text(encoding="utf-8") != text:
+        store_readme.write_text(text, encoding="utf-8")
+        print("refreshed README: %s" % store_readme)
+
+
+def memory_prepare(args: argparse.Namespace, verb: str) -> Tuple[Path, Path, Path, Path]:
+    """Checks shared by both writing verbs; returns (main toplevel, project toplevel, external dir, template)."""
+    if os.name != "posix":
+        raise MemoryErr("memory needs a POSIX system (symlinks); this platform is not supported")
+    template = TEMPLATE
+    main, wt = memory_project(Path.cwd())
+    top = wt or main
+    if verb == "externalize" and wt:
+        raise MemoryErr("externalize runs in the main checkout (%s); run `/supervisor-memory link` "
+                          "in this worktree" % main)
+    if not template.is_file():
+        raise MemoryErr("%s is missing; the pi-supervisor skills are incomplete; re-run ./install" % template)
+    if getattr(args, "dir", None):
+        external = Path(args.dir).expanduser().resolve()
+    else:
+        external = (memory_root(args) / memory_name(main, args.name)).resolve()
+    for name, _ in MEMORY_ITEMS:
+        if memory_git(top, "ls-files", "--error-unmatch", "--", name) is not None:
+            raise MemoryErr("%s is tracked by git; untrack it first: git rm -r --cached %s "
+                              "(then commit)" % (name, name))
+    checkouts = [main, top]
+    listing = memory_git(main, "worktree", "list", "--porcelain") or ""
+    checkouts += [Path(ln[len("worktree "):]).resolve() for ln in listing.splitlines() if ln.startswith("worktree ")]
+    for co in checkouts:
+        if external == co or co in external.parents:
+            raise MemoryErr("%s lies inside the checkout %s; use a directory outside every checkout of "
+                              "this repo (--root or --name)" % (external, co))
+    return main, top, external, template
+
+
+def memory_foreign_readme(external: Path) -> None:
+    readme = external / "README.md"
+    if readme.exists():
+        with open(str(readme), encoding="utf-8", errors="replace") as f:
+            first = f.readline().rstrip("\n")
+        if first != MEMORY_MARKER:
+            raise MemoryErr("%s exists and is not written by pi-supervisor (its first line is not "
+                              "the marker); move it away or pick another --root or --name" % readme)
+
+
+def memory_externalize_cmd(args: argparse.Namespace) -> int:
+    """Move (or create) the project's .supervisor in an external directory and link it."""
+    main, top, external, template = memory_prepare(args, "externalize")
+    plan = []  # (name, is_dir, action)
+    for name, is_dir in MEMORY_ITEMS:
+        proj, ext = top / name, external / name
+        state = memory_link_state(proj, ext)
+        present = ext.exists() or ext.is_symlink()
+        if state == "expected":
+            action = "keep"
+        elif state == "other":
+            raise MemoryErr("%s is a link to %s, not to %s; remove the link or pick another --root or --name"
+                              % (proj, os.readlink(str(proj)), ext))
+        elif state == "real":
+            if present:
+                raise MemoryErr("both exist: %s and %s; if %s is this project's own memory, move or remove one "
+                                  "of them, then re-run; if it belongs to another project with the same "
+                                  "name, keep both and re-run with --name set to a different project name"
+                                  % (proj, ext, ext))
+            action = "move"
+        elif present:
+            raise MemoryErr("%s exists in %s but not in the project; run `/supervisor-memory link` "
+                              "to attach it (or pick another --name if it belongs to another project)"
+                              % (name, external))
+        else:
+            action = "create"
+        plan.append((name, is_dir, action))
+    memory_foreign_readme(external)
+    external.mkdir(parents=True, exist_ok=True)
+    for name, is_dir, action in plan:
+        proj, ext = top / name, external / name
+        if action == "move":
+            shutil.move(str(proj), str(ext))
+            print("moved: %s -> %s" % (proj, ext))
+        elif action == "create":
+            if is_dir:
+                ext.mkdir()
+            else:
+                ext.touch()
+            print("created: %s" % ext)
+        if action != "keep":
+            os.symlink(str(ext), str(proj))
+            print("linked: %s -> %s" % (proj, ext))
+    memory_attach(main, external, template)
+    print("externalized: %s" % external)
+    return 0
+
+
+def memory_link_cmd(args: argparse.Namespace) -> int:
+    """Link the project's .supervisor to an existing external directory."""
+    main, top, external, template = memory_prepare(args, "link")
+    if not (external / ".supervisor").is_dir():
+        raise MemoryErr("no external store at %s (no .supervisor there); run `/supervisor-memory "
+                          "externalize` in the main checkout first, or pass the directory" % external)
+    plan = []
+    for name, is_dir in MEMORY_ITEMS:
+        proj, ext = top / name, external / name
+        state = memory_link_state(proj, ext)
+        present = ext.exists() or ext.is_symlink()
+        if state == "real":
+            raise MemoryErr("%s is a real file in the project; run `/supervisor-memory externalize` "
+                              "to move it, or remove it first" % proj)
+        if state == "other":
+            raise MemoryErr("%s is a link to %s (%s), not to %s; remove the link, then re-run"
+                              % (proj, os.readlink(str(proj)), "exists" if proj.exists() else "dangling", ext))
+        plan.append((name, state == "absent", present))
+    memory_foreign_readme(external)
+    for name, absent, present in plan:
+        if not absent:
+            continue
+        proj, ext = top / name, external / name
+        if not present:
+            ext.touch()
+            print("created: %s" % ext)
+        os.symlink(str(ext), str(proj))
+        print("linked: %s -> %s" % (proj, ext))
+    memory_attach(main, external, template)
+    print("linked: %s" % external)
+    return 0
+
+
+def memory_status_cmd(args: argparse.Namespace) -> int:
+    """Check the link and the exclude line; exit 1 with a repair hint when anything is off."""
+    if os.name != "posix":
+        raise MemoryErr("memory needs a POSIX system (symlinks); this platform is not supported")
+    main, wt = memory_project(Path.cwd())
+    top = wt or main
+    problems = []
+    sup = top / ".supervisor"
+    external = None  # the directory the project's .supervisor link names
+    if sup.is_symlink():
+        external = Path(os.path.normpath(str(top / os.readlink(str(sup))))).parent
+    for name, _ in MEMORY_ITEMS:
+        path = top / name
+        if path.is_symlink():
+            if not path.exists():
+                problems.append("%s: dangling link to %s; restore the external directory or remove the link and "
+                                "run `/supervisor-memory link`" % (name, os.readlink(str(path))))
+            elif external is not None and memory_link_state(path, external / name) != "expected":
+                problems.append("%s: links to %s, not %s; remove it and run `/supervisor-memory link`"
+                                % (name, os.readlink(str(path)), external / name))
+        elif path.exists():
+            problems.append("%s: a real file, not externalized; run `/supervisor-memory externalize`" % name)
+        else:
+            problems.append("%s: missing; run `/supervisor-memory link` (or `externalize`)" % name)
+    have = memory_exclude_lines(memory_excludes(main))
+    for line in MEMORY_EXCLUDES:
+        if line not in have:
+            problems.append("missing %s in info/exclude; run `/supervisor-memory link` to add it" % line)
+    for p in problems:
+        print(p)
+    if problems:
+        return 1
+    print("ok: %s -> %s" % (top, external))
+    return 0
+
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(prog="memory", description="Keep a project's .supervisor store outside its checkout: "
+                                "move it to an external directory and link it back (externalize), attach a linked "
+                                "worktree or fresh machine to an existing external directory (link), or check the "
+                                "link (status).")
+    sub = p.add_subparsers(dest="verb", metavar="VERB", required=True)
+    for verb, vhelp, func in (("externalize", "move or create the store in an external directory and link it",
+                               memory_externalize_cmd),
+                              ("link", "link the project to an existing external store", memory_link_cmd),
+                              ("status", "check the link and exclude line (exit 1 when broken)", memory_status_cmd)):
+        vp = sub.add_parser(verb, help=vhelp, description=vhelp[0].upper() + vhelp[1:] + ".")
+        if verb != "status":
+            vp.add_argument("--root", metavar="DIR",
+                            help="memory root (default: $PI_SUPERVISOR_MEMORY_ROOT, else "
+                                 "${XDG_DATA_HOME:-~/.local/share}/pi-supervisor/memory)")
+            vp.add_argument("--name", metavar="NAME", help="project directory under the root (default: origin basename)")
+        if verb == "link":
+            vp.add_argument("dir", nargs="?", help="external directory to link (ignores --root and --name)")
+        vp.set_defaults(func=func)
+    args = p.parse_args()
+    try:
+        return args.func(args)
+    except MemoryErr as exc:
+        print("error: %s" % exc, file=sys.stderr)
+        return 2
+    except (OSError, shutil.Error) as exc:
+        print("error: %s; check the path and permissions, then re-run" % exc, file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())
