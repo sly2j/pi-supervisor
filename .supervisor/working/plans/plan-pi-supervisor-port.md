@@ -115,8 +115,8 @@ User decisions 1-8 in the brief are binding and are restated under `## Scope Not
   are dropped; `scope-critic` is unaffected.
 - D10 Persona. It is on by default wherever the package loads, which with the documented
   install is only the `pi-supervisor` profile (D20). With a valid config, `session_start` selects the `top`-tier model with
-  `pi.setModel` and removes `bash` with `setActiveTools`, and `before_agent_start` appends
-  `agents/supervisor.md` through `event.systemPromptOptions.appendSystemPrompt`.
+  `pi.setModel` and sets the active tools to the `tools` list of `agents/supervisor.md` with `setActiveTools`, which drops `bash`, and `before_agent_start` appends
+  `agents/supervisor.md` by returning `{systemPrompt}` (the typed result), not by mutating `appendSystemPrompt`.
   `/supervisor off|on` toggles all three for the session, restoring the saved model and tools.
   Without a config the persona stays off and a status line names `/supervisor-config`.
 - D11 Commands, all literal: `/supervisor-config` (wizard; subcommands `status` and `doctor`),
@@ -368,8 +368,8 @@ Setup experience (documented in `docs/setup.md`; steps 0-1 implemented in P0, 2-
 5. With two or more providers available, it asks whether the critic should use a model from
    another provider (default no).
 6. If `web_search` is missing, it asks to install `pi-web-access` and runs the install.
-7. It writes the config, reloads with `ctx.reload()`, then runs the doctor checks (pi version,
-   each tier ready by `pi auth check`, web tools present, `python3`, `git`, `zip`).
+7. It writes the config, runs the doctor checks (pi version,
+   tier readiness from the session's model registry, not `pi auth check`; web tools present; `python3`, `git`, `zip`), then reloads with `ctx.reload()`, which is terminal for the handler.
 8. The next request is routed by the supervisor; the first dispatch works.
 9. Update: `git pull` in the clone, `./install`, restart. Uninstall: `./install --uninstall`;
    plain pi, its logins and the memory store stay.
@@ -530,8 +530,8 @@ runs (two small tasks through real leads; expected 2 to 10 USD depending on the 
 - The shared `auth.json` link (D21) means a `/logout` in either profile logs both out; OAuth
   refresh write-back through the link is inferred: P0's `auth_link_write_through` exercises
   pi's writer, not a live OAuth refresh.
-- `openai-codex` catalog entries may carry no prices, which would defeat `proposeTiers`'s
-  price ranking; P2 checks it and falls back to the same ids' `openai` prices.
+- `openai-codex` catalog entries carry prices (P1), so `proposeTiers`'s price ranking needs
+  no fallback: the `openai` price fallback is not built.
 
 ## Scope Notes
 
@@ -603,10 +603,10 @@ runs (two small tasks through real leads; expected 2 to 10 USD depending on the 
 ### P2: Setup, persona and commands
 - Goal: the setup experience, persona activation and the literal slash commands; done when the
   slice 4 checkpoint passes
-- Owns: `extensions/supervisor/{setup,persona,doctor,commands}.ts`, their `tests/node/` files
+- Owns: `extensions/supervisor/{setup,persona,doctor,commands}.ts`, their `tests/node/` files, `extensions/supervisor/index.ts`, `tests/node/skills.real.test.ts`, `tests/fixtures/rpc.ts`, `tests/fixtures/p2/`, `tests/fixtures/harness.ts`, `tests/fixtures/scripted-provider/index.ts`, and the P2-D14 lines in `skills/close-out/SKILL.md`, `skills/pick-up/SKILL.md`, `agents/supervisor.md`, `tests/test_skills_lint.py`, `tests/test_agents_lint.py`
 - Deps: P1
 - Stages: plan, execute
-- Status: plan
+- Status: execute
 - Artifacts: `.supervisor/working/plans/plan-pi-supervisor-port-P2.md`
 
 ### P3: Agents port
@@ -614,7 +614,7 @@ runs (two small tasks through real leads; expected 2 to 10 USD depending on the 
 - Owns: `agents/`, `tests/test_agents_lint.py`
 - Deps: P1
 - Stages: execute
-- Status: execute
+- Status: done
 - Artifacts: -
 
 ### P4: Skills port
@@ -623,7 +623,7 @@ runs (two small tasks through real leads; expected 2 to 10 USD depending on the 
 - Owns: `skills/` except `skills/project-memory/scripts/`, `tests/test_skills_lint.py`
 - Deps: P1
 - Stages: execute
-- Status: execute
+- Status: done
 - Artifacts: -
 
 ### P6: Validation
@@ -666,6 +666,11 @@ Waves: P0; then P1 and P5; then P2, P3 and P4; then P6 and P7.
 - 2026-11-15 P1: done; dispatch core landed (a6f9725, pushed); faux provider via extension works; before_agent_start fires in print mode; children load profile packages (project-local only when trusted in the profile); pi-web-access tools visible in children, no fix needed; unknown skill keys load silently; live nested run on openai-codex (gpt-5.6-luna lead, gpt-6-luna worker/critic) returned "worker: ZEBRA-41 / critic: CRITIC-OK", 7448 in/262 out tokens, about 0.0016 USD at catalog prices; deferred: CLAUDE.md test command fix (`node --test`), outside P1's files
 - 2026-11-15 decision: P1 deviations accepted: child sessions live under the parent's own session id; `dispatch` is registered at every depth and refuses at depth 2 or more; check command is `node --test`; source: supervisor
 - 2026-11-15 decision: pi's default tools are read, bash, edit, write, so P3 adds grep, find and ls explicitly to agents whose source had Grep or Glob; source: P1 finding
+- 2026-11-15 P3: 15 agents ported under D12 to `agents/` with `tests/test_agents_lint.py` (123 lint tests) and a real-load node test; landed as 27b69fc and pushed; deferred: none (`agent_skill_refs_exist` stays with P6)
+- 2026-11-15 P4: 16 skills ported by D12 with tests/test_skills_lint.py, landed a44eefe and pushed; deferred: "/clear" wording in close-out and pick-up (no D12 row), P1 scripted-provider skill-warning run not executed
+- 2026-11-15 P2: plan done, child plan plan-pi-supervisor-port-P2.md (4 slices, critic PASS round 2); includes /clear -> /new (P2-D14) and six Amend parent items listed in its Scope Notes; deferred: none
+- 2026-11-15 decision: P3 uses explicit `tools` allowlists for every agent instead of exclude lists, so grep, find and ls are kept; source: P3 finding, accepted by supervisor
+- 2026-11-15 decision: pi's session reset is `/new`; "safe to /clear" wording becomes "safe to /new" in P2 slice 4, which also takes the skill-warning check P4 skipped; source: P2 plan
 
 ## Todo
 
@@ -682,8 +687,8 @@ Waves: P0; then P1 and P5; then P2, P3 and P4; then P6 and P7.
 - [x] P1 1c: live nested run in the launcher's profile on `openai-codex` (D23); log the route
 - [x] P5: port `CS/deploy:2140-2433` to `skills/project-memory/scripts/memory`; port the tests
 - [ ] P2: child plan, then execute (wizard, persona, doctor, commands)
-- [ ] P3: copy and adapt 15 agents by D12; write `tests/test_agents_lint.py`
-- [ ] P4: copy and adapt 16 skills and their support files by D12; write
+- [x] P3: copy and adapt 15 agents by D12; write `tests/test_agents_lint.py`
+- [x] P4: copy and adapt 16 skills and their support files by D12; write
       `tests/test_skills_lint.py`
 - [ ] P6: child plan, then execute (cross lint, routing test, end-to-end runs,
       `docs/parity.md`)
