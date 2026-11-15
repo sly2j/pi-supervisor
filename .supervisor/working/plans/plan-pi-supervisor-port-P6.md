@@ -124,8 +124,10 @@ Rejected alternatives:
   `gpt-6-luna` (the `proposeTiers` indices 0, 2, 5, 7 of 8), critic `null`, no `--model`.
   - `e2e_mode1`: "Research two questions and write them up as one research file: how
     registry.py registers plugins, and how loader.py finds them. Review: light." Two independent
-    questions are what `agents/researcher.md:30-33` splits across workers. Asserts: a
-    `.supervisor/working/research/research-*.md` exists and names both files; the child sessions include `researcher`, at least one
+    questions are what `agents/researcher.md:30-33` splits across workers. Asserts: a research
+    file names both files, at `.supervisor/working/research/research-*.md`, at the path the brief
+    names, or under `.supervisor/archive/working/research/` after curator archiving; the child
+    sessions include `researcher`, at least one
     `researcher-worker` and `critic`; every child's model is its tier's model; no child of a
     worker exists (depth); `README.md` is unchanged. This exercises the persona, dispatch at
     depth 1 and 2, skill injection (`lead-loop`, `residue`), the lead loop and real tier
@@ -189,8 +191,11 @@ Rejected alternatives:
      `web_search` present (`/supervisor-config status`).
   6. One request, "Fix the typo 'recieve' in README.md.": the screen shows a `dispatch` to
      `fixer`, and its session appears under the D15 directory.
-  7. `/supervisor off`, then `/supervisor on`: the status line follows.
-  8. Quit, kill the socket, `./install --uninstall --yes` for the temporary profile and prefix.
+  7. `/supervisor off`, then `/supervisor on`: the status line follows. Then
+     `<prefix>/bin/pi-supervisor update` runs in the clone: it reuses the choices recorded in
+     `<clone>/.install.conf` and asks before changing any of them; capture its output.
+  8. Quit, kill the socket, `<prefix>/bin/pi-supervisor uninstall` for the temporary profile and
+     prefix.
   The agent never runs `/login` or `/logout`: through the D21 link they would change the
   user's real logins.
 - P6-D13 Anthropic OAuth notice (P2-D2.5): the user has no Anthropic login (D23), so it cannot
@@ -328,7 +333,8 @@ checklist below and the result is added to `docs/parity.md` section 4 before the
 User checklist (your real launcher; about 10 minutes, about 0.20 USD of subscription quota):
 
 1. In the clone: `./install`. It creates `~/.config/pi-supervisor` and
-   `~/.local/bin/pi-supervisor`, and prints the PATH line if needed.
+   `~/.local/bin/pi-supervisor`, records your choices in `<clone>/.install.conf`, and prints the
+   PATH line if needed.
 2. In a scratch git repo with a `README.md` holding the typo `recieve`: run `pi-supervisor`.
    The editor shows `/supervisor-config`; press Enter.
 3. Read the tier proposal: four lines with roles and prices, readable in the select. Accept.
@@ -339,7 +345,9 @@ User checklist (your real launcher; about 10 minutes, about 0.20 USD of subscrip
    should be fixed.
 6. `/supervisor off`: the status line changes; `/supervisor on` turns it back.
 7. Quit, then run plain `pi` once: it starts as before, without the supervisor.
-8. Report any step that differed.
+8. In the clone, run `pi-supervisor update`: it reuses the choices in `<clone>/.install.conf`
+   and asks before changing any of them.
+9. Report any step that differed.
 
 ## Risks
 
@@ -372,6 +380,9 @@ User checklist (your real launcher; about 10 minutes, about 0.20 USD of subscrip
      routed agents' `description:` lines.
   2. `## Verification`, model usage paragraph: replace the P6 estimates with P6-D9's table.
   3. Open question 1 moves to this plan's open question 1.
+- Deviation (recorded at execution): one description string in `extensions/supervisor/index.ts`
+  (the `dispatch` `model` parameter) was changed to restore the source harness's "if omitted, the
+  agent runs on its own tier" rule. The harness tests live in `tests/test_live_harness.py`.
 
 ## Assumptions
 
@@ -387,13 +398,13 @@ User checklist (your real launcher; about 10 minutes, about 0.20 USD of subscrip
 
 ## Todo
 
-- [ ] S1: `tests/test_pack_cross.py` with the four cross tests; planted failure check
-- [ ] S2: `tests/live.py`, `tests/fixtures/live-stop/`, token-free harness tests
-- [ ] S2: `tests/test_live_routing.py` with 28 mapped cases and `routing_cases_valid`
-- [ ] S2: stage A (pilot), re-estimate, stage B; record score and per-case lines
-- [ ] S3: tuning rounds if needed and approved (at most two); keep the better round
-- [ ] S4: `tests/fixtures/e2e-repo/`, `tests/test_live_e2e.py`; stage C; evidence kept
-- [ ] S5: agent TUI run in tmux (stage E); clean up the socket and profile
-- [ ] S5: `docs/parity.md` with verdict, capability rows, routing table, evidence, differences
-- [ ] S5: `parity_rows_complete`; `python3 -m pytest -q` and `node --test` pass
+- [x] S1: `tests/test_pack_cross.py` with the four cross tests; planted failure check
+- [x] S2: `tests/live.py`, `tests/fixtures/live-stop/`, token-free harness tests
+- [x] S2: `tests/test_live_routing.py` with 28 mapped cases and `routing_cases_valid`
+- [x] S2: stage A (pilot), re-estimate, stage B; record score and per-case lines
+- [x] S3: tuning rounds if needed and approved (at most two); keep the better round
+- [x] S4: `tests/fixtures/e2e-repo/`, `tests/test_live_e2e.py`; stage C; evidence kept
+- [x] S5: agent TUI run in tmux (stage E); clean up the socket and profile
+- [x] S5: `docs/parity.md` with verdict, capability rows, routing table, evidence, differences
+- [x] S5: `parity_rows_complete`; `python3 -m pytest -q` and `node --test` pass
 - [ ] User checklist run; result added to `docs/parity.md` section 4

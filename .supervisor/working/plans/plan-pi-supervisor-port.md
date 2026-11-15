@@ -209,6 +209,9 @@ User decisions 1-8 in the brief are binding and are restated under `## Scope Not
     turns the persona on there. Documented as possible but not recommended, with no extra code
     or tests, as the source's `--global` (README "not recommended").
   - Updates: setup step 9; `pi-supervisor update --extensions` updates the web package.
+  - The launcher has `pi-supervisor update` and `pi-supervisor uninstall`. Install choices are
+    recorded in `<clone>/.install.conf` and reused by every later run, with confirmation before a
+    recorded choice changes. `--shared-login` is the explicit way back to the default link.
 - D21 Credentials. `auth.json` lives in the agent directory, so a new profile sees no logins.
   Options:
   - Link (chosen, default): `<profile>/auth.json` is a symlink to
@@ -308,7 +311,7 @@ agents/<15 names>.md
 skills/<16 names>/SKILL.md  (+ references/, templates/, scripts/ as in CS/pack/skills)
 tests/  test_install.py  test_agents_lint.py  test_skills_lint.py  test_pack_cross.py
         test_memory.py  test_live_routing.py  node/*.test.ts  fixtures/
-docs/  setup.md  architecture.md  memory.md  workflow-lifecycle.md  context-engineering.md
+docs/  deploy.md  architecture.md  local-memory.md  workflow-lifecycle.md  context-engineering.md
        parity.md
 ```
 
@@ -356,7 +359,7 @@ Invariants and gotchas:
 - `docs/architecture.md` keeps the agent inventory in step with the frontmatter, as in the
   source.
 
-Setup experience (documented in `docs/setup.md`; steps 0-1 implemented in P0, 2-8 in P2):
+Setup experience (documented in `docs/deploy.md`; steps 0-1 implemented in P0, 2-8 in P2):
 0. `git clone git@github.com:sly2j/pi-supervisor.git` (private: the user's GitHub access is
    needed), then `cd pi-supervisor && ./install`. It prints the profile, whether the logins
    were linked, and the PATH line if `~/.local/bin` is missing from `PATH`.
@@ -494,7 +497,7 @@ slices in a child plan. Test cases and the checkpoint below are the package's ac
      `e2e_mode2: a typo fix -> fixer child only`.
    - Checkpoint: both test commands pass; `docs/parity.md` has a result for every parity-map
      row.
-8. P7 Docs. Units: one per doc file. `docs/setup.md` covers setup steps 0-9, D21's
+8. P7 Docs. Units: one per doc file. `docs/deploy.md` covers setup steps 0-9, D21's
    trade-off and `--separate-login`, custom providers in the profile, the opt-in direct install
    (D20), and that `pi update` updates the pi binary shared with plain pi. Checkpoint: every
    command and path in the docs exists (`tests/test_pack_cross.py::docs_paths_exist`).
@@ -523,7 +526,7 @@ thresholds are P6-D9's table in `.supervisor/working/plans/plan-pi-supervisor-po
 - `pi-web-access` is a third-party 0.x package; its tool names or activation default may
   change. The doctor check names the missing tools.
 - A lead killed by SIGKILL cannot clean up its children; the abort test covers SIGTERM only.
-- Kept child sessions (D15) grow without bound; `docs/setup.md` names the directory to prune.
+- Kept child sessions (D15) grow without bound; `docs/deploy.md` names the directory to prune.
 - Anthropic subscription logins bill per token in pi (`R`, Q4); the wizard shows pi's notice.
 - Tiers can collapse to fewer than four distinct models on a small credential set; the wizard
   says so, and routing still works.
@@ -635,7 +638,7 @@ thresholds are P6-D9's table in `.supervisor/working/plans/plan-pi-supervisor-po
   routed agents' `description:` lines
 - Deps: P2, P3, P4, P5
 - Stages: plan, execute
-- Status: execute
+- Status: blocked: execute: owner checklist (docs/parity.md section 4) is the user's to run
 - Artifacts: `.supervisor/working/plans/plan-pi-supervisor-port-P6.md`
 
 ### P7: Docs
@@ -680,6 +683,15 @@ None here. The P6 model usage question is open question 1 of
 - 2026-11-15 P6: plan done, child plan plan-pi-supervisor-port-P6.md (5 slices, staged live spend A-E with cost caps, critic PASS round 2), three Amend parent items in its Scope Notes; deferred: live runs and tuning await the user's spend decision
 - 2026-11-15 decision: three code wording follow-ups from P7 fixed directly (wizard tier role labels, agent-authoring tools wording, doctor.ts comment); source: supervisor
 - 2026-11-15 decision: P6 token-free slices (cross lint, fixtures, parity record skeleton) start now; live stages A-E stay blocked until the user approves the spend; source: supervisor
+- 2026-11-15 decision: docs follow the upstream claude-supervisor documents as closely as possible, same style and level of detail, written for users rather than agents, with a link to upstream; source: user
+- 2026-11-15 P7: revision done; README.md and docs/{architecture,context-engineering,deploy,local-memory,workflow-lifecycle}.md re-made as ports of the upstream originals (8761a12), install and update sections brought in line with c87cee6 (72dee66), pushed; deferred: the upstream-inherited close-out sentence in workflow-lifecycle.md stays with the user
+- 2026-11-15 decision: live stages A-E approved on the OpenAI subscription login, D only if needed, no API-key fallback; source: user
+- 2026-11-15 decision: nobody should have to remember an install flag; install choices are recorded and reused, update and uninstall are single launcher commands; source: user
+- 2026-11-15 executor (install UX): recorded install choices, `pi-supervisor update`/`uninstall`, change confirmation, pi version check, wizard keeps critic, single closing notice, doctor hints; landed c87cee6 and pushed; deferred: proposals A-E kept at the recommended current behaviour by supervisor
+- 2026-11-15 P6: token-free part landed (a308d6d: cross lint, live harness with cost monitor and stop fixture, 28 mapped routing cases, e2e tests, parity.md skeleton); deferred: live stages
+- 2026-11-15 P6 (stages A-D, C): routing 27/28 then 28/28 after one tuning round (agents/supervisor.md Path: minimal wording); e2e_mode2 pass; e2e_mode1 fail (researcher passed model standard to critic and scope-critic; research-file assertion conflicts with brief-named path and curator archive); 2.96 USD catalog, no stops; landed 32700e6, pushed
+- 2026-11-15 decision: e2e_mode1 stays strict on reviewer tiers and is fixed by wording, not a code guard; the research-file assertion is a test defect and is loosened; source: supervisor
+- 2026-11-15 P6: e2e_mode1 re-run pass after restoring the dispatch `model` "if omitted, own tier" sentence (0.27 USD); stage E TUI run passes steps 1-7, update and uninstall (0.07 USD); parity provisional pass, landed d5da2bd and pushed; deferred: owner checklist (owner action), closing-notification-after-reload follow-up (P2 UX, out of P6 scope)
 
 ## Todo
 
