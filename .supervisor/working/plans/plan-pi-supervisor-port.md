@@ -510,9 +510,8 @@ and the routing test passes at least 24 of 28 cases, with every failure listed (
 `package.json` to `1.0.0` and push.
 
 Model usage: P1 slice 1c is approved and runs on the `openai-codex` subscription (D23; under
-1 USD on the API-key fallback). Each P6 run still needs the user's go-ahead: the routing
-test (28 cases, at most two turns each on the `top` tier; the source caps a case at 0.50 USD, so at most 14 USD and probably a few); P6 end-to-end
-runs (two small tasks through real leads; expected 2 to 10 USD depending on the tier models).
+1 USD on the API-key fallback). Each P6 run still needs the user's go-ahead; its spend estimates and stop
+thresholds are P6-D9's table in `.supervisor/working/plans/plan-pi-supervisor-port-P6.md`.
 
 ## Risks
 
@@ -630,10 +629,13 @@ runs (two small tasks through real leads; expected 2 to 10 USD depending on the 
 ### P6: Validation
 - Goal: cross-pack lint, routing test, end-to-end runs and the parity record; done
   when the slice 7 checkpoint passes
-- Owns: `tests/test_pack_cross.py`, `tests/test_live_routing.py`, `docs/parity.md`
+- Owns: `tests/test_pack_cross.py`, `tests/test_live_routing.py`, `docs/parity.md`,
+  `tests/live.py`, `tests/test_live_e2e.py`, `tests/fixtures/live-stop/`,
+  `tests/fixtures/e2e-repo/`, and the P6-D10 tuning lines in `agents/supervisor.md` and the
+  routed agents' `description:` lines
 - Deps: P2, P3, P4, P5
 - Stages: plan, execute
-- Status: plan
+- Status: execute
 - Artifacts: `.supervisor/working/plans/plan-pi-supervisor-port-P6.md`
 
 ### P7: Docs
@@ -642,15 +644,15 @@ runs (two small tasks through real leads; expected 2 to 10 USD depending on the 
 - Owns: `README.md`, `docs/` except `docs/parity.md`
 - Deps: P2, P3, P4, P5
 - Stages: write
-- Status: write
+- Status: done
 - Artifacts: -
 
 Waves: P0; then P1 and P5; then P2, P3 and P4; then P6 and P7.
 
 ## Open Questions
 
-1. Model usage for the P6 runs (routing test and two end-to-end runs). Recommended: decide
-   when P6 is planned, on the `openai-codex` subscription first (D23).
+None here. The P6 model usage question is open question 1 of
+`.supervisor/working/plans/plan-pi-supervisor-port-P6.md`.
 
 ## Log
 
@@ -674,6 +676,10 @@ Waves: P0; then P1 and P5; then P2, P3 and P4; then P6 and P7.
 - 2026-11-15 decision: pi's session reset is `/new`; "safe to /clear" wording becomes "safe to /new" in P2 slice 4, which also takes the skill-warning check P4 skipped; source: P2 plan
 - 2026-11-15 P2: done, `2e34f58` pushed to origin/main; 71 node and 244 pytest checks pass; deferred: manual TUI verification run (TUI reload, real `pi-web-access` install, Anthropic OAuth notice)
 - 2026-11-15 decision: P2 deviations accepted: persona refreshes the model registry once when `top` shows no credentials at session start; Escape on a confirm counts as "no"; re-running the wizard re-asks the critic question; the wizard turns the persona on before reload; `/project-backup` runs the script with bash; source: supervisor
+- 2026-11-15 P7: done; README.md and docs/{setup,architecture,memory,workflow-lifecycle,context-engineering}.md written and committed (7a2cef2, pushed); critic codex gpt-6.1-sol PASS round 2; nine code-versus-plan differences documented per the code; deferred: README status paragraph update after P6, docs_paths_exist test (P6's)
+- 2026-11-15 P6: plan done, child plan plan-pi-supervisor-port-P6.md (5 slices, staged live spend A-E with cost caps, critic PASS round 2), three Amend parent items in its Scope Notes; deferred: live runs and tuning await the user's spend decision
+- 2026-11-15 decision: three code wording follow-ups from P7 fixed directly (wizard tier role labels, agent-authoring tools wording, doctor.ts comment); source: supervisor
+- 2026-11-15 decision: P6 token-free slices (cross lint, fixtures, parity record skeleton) start now; live stages A-E stay blocked until the user approves the spend; source: supervisor
 
 ## Todo
 
@@ -695,7 +701,7 @@ Waves: P0; then P1 and P5; then P2, P3 and P4; then P6 and P7.
       `tests/test_skills_lint.py`
 - [ ] P6: child plan, then execute (cross lint, routing test, end-to-end runs,
       `docs/parity.md`)
-- [ ] P7: write `README.md` and `docs/`
+- [x] P7: write `README.md` and `docs/`
 - [ ] After each package lands: push `main` to `origin` (D25)
 - [ ] Verification: temporary-profile install and full check; uninstall leaves `~/.pi/agent`
       unchanged; set version `1.0.0`; push
