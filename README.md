@@ -2,7 +2,7 @@
 
 Supervisor for Pi is the port of [Supervisor for Claude](https://github.com/sly2j/claude-supervisor) to the pi coding harness. It is a multi-agent orchestration layer for pi. It is centered around a single supervisor agent that dispatches tasks based on scope and complexity. The supervisor answers simple questions itself, sends small exact tasks to a fast, cheap agent, and gives larger work to a lead agent. The lead splits the work across parallel workers when it has several independent parts, otherwise does it itself, and has critic agents review the result for quality and scope.
 
-*Status: version 0.x, during the port. The unit and integration suites exist and run without model calls. The routing test and the end-to-end validation against claude-supervisor have not run yet, and the interactive setup has not yet been exercised by hand in the pi TUI.*
+*Status: version 0.x, during the port. The unit and integration suites run without model calls. On the `openai-codex` subscription, the live routing test scores 28 of 28, both end-to-end runs pass, and an agent-driven run of the setup in the pi TUI passes (see [docs/parity.md](docs/parity.md)). The owner's manual checklist is still pending.*
 
 ## What It's For
 

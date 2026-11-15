@@ -2,10 +2,10 @@
 
 ## 1. Verdict
 
-**Pending** (2026-11-15). Stages A to D are run: the cross lint passes, routing scores 28 of 28
-after one tuning round, and `e2e_mode2` passes. `e2e_mode1` failed (section 4), which holds 1.0.0
-until a re-run passes. The verdict waits for that re-run, stage E (agent TUI run) and the owner
-checklist.
+**Provisional pass; owner checklist pending** (2026-11-15). Stages A to E are run: the cross
+lint passes, routing scores 28 of 28 after one tuning round, `e2e_mode1` (re-run) and
+`e2e_mode2` pass, and the agent TUI run passes steps 1 to 7 (section 4). No rule below holds
+1.0.0 on these results. The verdict becomes final when the owner checklist (section 4) passes.
 
 Sign-off rules (P6-D15, parity bar D24: 24 of 28 routing cases to sign off, 28 as target):
 
@@ -127,7 +127,7 @@ repo.
 40 s. The main session dispatched one `fixer` on `gpt-6-luna` with thinking `xhigh` (its
 `thinking_level_change` entry); `README.md` says `receive`; no lead ran.
 
-`e2e_mode1`: **fail**. 98,050 input, 246,400 cache-read and 8,709 output tokens; 0.35 USD;
+`e2e_mode1`, first run: **fail**. 98,050 input, 246,400 cache-read and 8,709 output tokens; 0.35 USD;
 about 270 s; no stop fired. Children (agent, model): `researcher` strong, two
 `researcher-worker` standard, `critic` standard, `scope-critic` standard, then the supervisor's
 close-out: `fixer` fast, `curator` standard, `git-ops` fast.
@@ -140,17 +140,73 @@ close-out: `fixer` fast, `curator` standard, `git-ops` fast.
 | a `research-*.md` under `.supervisor/working/research/` names both files | fail as written: the supervisor's brief named `plugin-registration-and-discovery.md`, the researcher used it unchanged, and the `curator` close-out moved it to `.supervisor/archive/working/research/`; the file names both `registry.py` and `loader.py` |
 | `README.md` unchanged | pass (no agent wrote to it) |
 
-Follow-ups: (1) the lead downgraded its reviewers, a judgement failure no agent text prevents;
-(2) the research-file assertion does not allow a brief-supplied name or the close-out archive,
-both of which the agent text permits. A re-run needs a new spend approval at the stage C cost.
+Fixes: (1) the port's `dispatch` tool had dropped the source harness's sentence that an omitted
+`model` runs the agent on its own definition's model. The `model` description now reads "Tier
+override: top, strong, standard or fast. If omitted, the agent runs on its own tier; pass it only
+where the pack prescribes an override" (`extensions/supervisor/index.ts`). (2) The research-file
+assertion now accepts any file name under `.supervisor/working/research/` or
+`.supervisor/archive/working/research/`; it still requires a file naming both `registry.py` and `loader.py`.
 
-Stage E (agent TUI run) and the owner checklist: pending.
+`e2e_mode1`, re-run: **pass**. 90,291 input, 206,336 cache-read and 8,609 output tokens;
+0.27 USD; about 270 s; no stop fired. Every dispatch omitted `model`. Children (agent, model,
+turns): `researcher` strong 6, two `researcher-worker` standard 4 and 3, `critic` strong 4, then
+the close-out: `fixer` fast 5, `curator` standard 5, `git-ops` fast 6. The critic returned PASS with
+no findings, so no `scope-critic` ran, as `lead-loop` prescribes. The researcher wrote
+`.supervisor/working/research/research-plugin-registration-discovery.md`. All five assertions
+pass. `e2e_mode2` was not re-run: the new wording only tells a caller to omit `model`, which that
+run already did.
+
+Stage E, agent TUI run (P6-D12), 2026-11-15: real TUI in tmux on socket `p6-tui`, pi 1.5.2.
+`./install --profile --prefix` ran from a temporary clone of a temporary upstream (so no
+`.install.conf` in the checkout), with the shared login link (D21), in a shell with no API keys
+in its environment. Route `openai-codex` (oauth), the only provider with credentials. Usage of
+the whole run: 15,261 input, 38,400 cache-read and 708 output tokens; 0.07 USD; 7 turns; the
+watcher (1 USD, 900 s) never fired.
+
+| Step | Observation | Result |
+|---|---|---|
+| 1. First start | notice "Supervisor for Pi is not set up yet. Press Enter to choose its models."; editor prefilled with `/supervisor-config`; status line `supervisor: not set up (/supervisor-config)` | pass |
+| 2. Proposal | the select header lists four lines: tier, `openai-codex/<id>`, price per M, roles (`top` `gpt-6-astra`, `strong` `gpt-5.6-terra`, `standard` `gpt-6.1-terra`, `fast` `gpt-6-luna`); options Accept, Change per tier, Cancel | pass |
+| 3. Accept, critic | accepted; no critic step (one provider), as designed | pass |
+| 4. Web tools | Yes: `npm:pi-web-access` added to the temporary profile's `settings.json`; the default agent directory's `settings.json` checksum unchanged | pass |
+| 5. Reload | `pi-web-access:dist` loaded; status line `supervisor on · top openai-codex/gpt-6-astra`; `status` shows "Web tools: active"; `doctor` 0 FAIL, 0 WARN. Neither the install message nor the closing "Supervisor is on" notification is visible after the reload (section 5) | pass, with a follow-up |
+| 6. Typo fix | one `dispatch` to `fixer` on `openai-codex/gpt-6-luna`; its session under `<profile>/pi-supervisor/sessions/`; `README.md` says `receive`, the only change | pass |
+| 7. Off and on | `/supervisor off`: "Supervisor persona is off. Your model, thinking level and tools are restored.", status line `supervisor off (/supervisor on)`, model back to pi's default; `/supervisor on`: status line `supervisor on · top openai-codex/gpt-6-astra` | pass |
+| `pi-supervisor update` | after one commit in the temporary upstream: the clone fast-forwarded, the install re-ran on the recorded choices without asking, then `Packages are already up to date`; exit 0 | pass |
+| `pi-supervisor uninstall` | asked to type `pi-supervisor`, removed the launcher and the profile, printed "plain pi, its logins and the memory store are untouched"; exit 0 | pass |
+| Anthropic OAuth notice | not exercised live: no Anthropic login (D23); code in `extensions/supervisor/setup.ts` | not exercised |
+
+The tmux server was killed and the temporary directories removed afterwards.
+
+Owner checklist (pending; your real install, about 10 minutes and a few cents of subscription
+quota). Report any step that differs:
+
+1. In the clone, run `./install`. It creates `~/.config/pi-supervisor` and
+   `~/.local/bin/pi-supervisor`, records your choices in `.install.conf`, and prints the PATH line
+   if needed.
+2. In a scratch git repo whose `README.md` holds the typo `recieve`, run `pi-supervisor`. The
+   editor shows `/supervisor-config`; press Enter.
+3. Read the tier proposal (four lines with roles and prices) and accept it. Answer the critic
+   question if it appears (no is fine), and answer yes to the web tools.
+4. After the reload, note which messages you saw, and check that the status line reads
+   `supervisor on · top ...`.
+5. Type "Fix the typo 'recieve' in README.md." It should dispatch `fixer`, and the file should be
+   fixed.
+6. `/supervisor off`: the status line changes; `/supervisor on` turns it back.
+7. Quit, then run `pi-supervisor update`: it pulls the clone, re-installs without asking and
+   updates the pi packages.
+8. Run plain `pi` once: it starts as before, without the supervisor.
 
 ## 5. Known differences and observations
 
 - The transcript audit tool of the source is dropped by decision. The child sessions under
   `<profile>/pi-supervisor/sessions/` (D15) replace it as evidence.
-- Before the reload, setup shows two notifications (the doctor report and the persona message).
+- Setup ends with one notification ("Supervisor is on" and the doctor report), plus the
+  pi-web-access message when the web tools are installed. In the stage E TUI run the reload
+  redrew the screen and neither was visible afterwards; the status line is the visible
+  confirmation. Follow-up: show the closing message after the reload.
+- A later notification replaces an earlier one on screen (`status` then `doctor` showed only the
+  doctor report).
 - The Anthropic OAuth notice (`extensions/supervisor/setup.ts`) is not exercised live: the owner has no
   Anthropic login (D23).
 - On the subscription, uncached prompts of different lengths often report the same input count

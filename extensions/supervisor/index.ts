@@ -26,7 +26,13 @@ const Params = Type.Object({
 		Type.Object({
 			agent: Type.String({ description: "Agent name" }),
 			task: Type.String({ description: "Self-contained brief for the agent" }),
-			model: Type.Optional(Type.String({ description: "Tier override: top, strong, standard or fast" })),
+			model: Type.Optional(
+				Type.String({
+					description:
+						"Tier override: top, strong, standard or fast. If omitted, the agent runs on its own tier; " +
+						"pass it only where the pack prescribes an override",
+				}),
+			),
 		}),
 		{ minItems: 1, maxItems: MAX_TASKS, description: "Tasks to run in parallel; results come back in order" },
 	),

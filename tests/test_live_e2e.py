@@ -93,10 +93,11 @@ def test_e2e_mode1(box):
         assert k["model"] == p.tiers[agent_tier(k["agent"])], (k["agent"], k["model"])
         if k["agent"].endswith("-worker") or k["agent"] == "critic":
             assert not dispatched(k["file"]), "%s dispatched (depth)" % k["agent"]
-    files = list((p.repo / ".supervisor" / "working" / "research").glob("research-*.md"))
-    assert files, "no research file"
-    body = "\n".join(f.read_text() for f in files)
-    assert "registry.py" in body and "loader.py" in body
+    # The supervisor may name the file in its brief, and the curator's close-out may archive it.
+    store = p.repo / ".supervisor"
+    files = [f for d in ("working/research", "archive/working/research") for f in (store / d).glob("*.md")]
+    assert any("registry.py" in f.read_text() and "loader.py" in f.read_text() for f in files), \
+        "no research file naming registry.py and loader.py: %s" % files
     fixture = (ROOT / "tests" / "fixtures" / "e2e-repo" / "README.md").read_text()
     assert (p.repo / "README.md").read_text() == fixture, "README.md changed"
 
