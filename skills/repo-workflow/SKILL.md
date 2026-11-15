@@ -1,0 +1,145 @@
+---
+name: repo-workflow
+description: Default rules for versioning, branches, worktrees, checks and landing changes in a repo. Preloaded by executor, planner and git-ops; the brief and the repo's `AGENTS.md`/`CLAUDE.md` override it. Use before committing, bumping a version, branching, cutting a worktree, merging, or choosing which checks to run.
+---
+
+# Repo Workflow
+
+The brief and the repo's `AGENTS.md`/`CLAUDE.md` override these defaults.
+
+## Projects only
+
+Decide first whether the directory is a project, per `project-memory` (Projects and one-offs); a
+git repo whose toplevel is neither `$HOME` nor above it always is one. Outside a project nothing is
+persisted:
+- Only the read-only defaults apply: work in the current checkout (no worktree, no merge), create,
+  bump or tag no version, never force-push the default branch, run the checks the repo names.
+- Ask no versioning question. Never create or write `AGENTS.md`/`CLAUDE.md`, `VERSION` or a
+  changelog for this skill.
+
+## Versioning
+
+- Never create, bump or tag a version, or write a changelog entry, unless the brief, `AGENTS.md` or
+  `CLAUDE.md` says to.
+- A repo that already versions its own way (a version field in `pyproject.toml` or `package.json`,
+  release tags, a maintained `CHANGELOG`) keeps its scheme; say in the report when a change may need
+  a bump.
+- A repo whose `AGENTS.md`/`CLAUDE.md` says it uses the `repo-workflow` `X.y` scheme follows the
+  next section.
+- A project with no versioning and no `AGENTS.md`/`CLAUDE.md` line about it: the agent that
+  commits a change to the default branch commits it unversioned and ends its report with this
+  question, verbatim:
+  ```
+  versioning: none declared. Adopt the repo-workflow X.y scheme?
+  Yes: add "Versioning: uses the repo-workflow X.y scheme." to AGENTS.md/CLAUDE.md and create VERSION
+  holding 1.0.
+  No: add "Versioning: none; do not ask."
+  ```
+  Never ask once `AGENTS.md`/`CLAUDE.md` records an answer.
+- Whoever is briefed with the answer writes that line to root `AGENTS.md`/`CLAUDE.md` (the
+  existing one, else `AGENTS.md`) and, on yes, creates `VERSION`.
+
+## The X.y Scheme
+
+- `VERSION` holds `X.y` and tracks the repo's primary deliverable: its shipped code, or the prime
+  documents in a writing repo. The repo's `AGENTS.md`/`CLAUDE.md` may name these versioned paths;
+  when it is silent, apply that principle. Ancillary paths (the `.supervisor/` store,
+  developer-facing docs, `AGENTS.md`/`CLAUDE.md`, plan files) are never versioned.
+- y rises by one once per change set that lands on the default branch and touches a versioned
+  path. A change set that touches only ancillary paths, such as a `chore(memory):` commit, leaves
+  `VERSION` alone. X rises, and y resets to 0, when a major change lands; the user, `AGENTS.md` or
+  `CLAUDE.md` or the plan says what is major.
+- The agent that lands a versioned change set on the default branch bumps `VERSION`
+  before running the checks: the lead in its squash commit, the editing agent for a direct Mode 1
+  commit, and `git-ops` for a Mode 2 commit. `curator` and `fixer` never commit; `fixer` edits
+  `VERSION` only when its brief says so. Never every worker.
+- Other branches leave `VERSION` alone.
+- `git-ops` stages a modified `VERSION` with the commit. On the default branch, when the commit
+  touches a versioned path and `git diff HEAD --stat -- VERSION` is empty, it raises y itself
+  before committing.
+
+## Branches And Worktrees
+
+- In a git project, each `executor` change set works in its own `git worktree` at
+  `<toplevel>/.pi/worktrees/<slug>`, on a new branch cut from the default branch. Name the
+  branch like the repo's existing branches, else `<type>/<slug>`. Workers share the lead's
+  worktree, and only the lead changes git state in it. Quick-tier work (`fixer`, `git-ops`),
+  conflict resolution, environment repair and repos with submodules stay in the current checkout.
+- Before cutting a worktree, run `git worktree list`: resume in the one for your own slug, and
+  report the other linked worktrees as "other worktrees". If
+  `git check-ignore -q .pi/worktrees/<slug>` fails, append the line `/.pi/worktrees/` to
+  `$(git rev-parse --git-path info/exclude)`. Never edit `.gitignore` for this.
+- Clean up other worktrees only when the user asks, never with `--force`: commit uncommitted edits
+  as a `wip:` commit, `git worktree remove` it, `git branch -d` its branch only if
+  `git log <default>..<branch>` is empty, then `git worktree prune`.
+- When the brief or the user explicitly says to work in place or in a named checkout or worktree,
+  work and commit there, and merge only when asked.
+- Copy small ignored files the checks need (`.env`, local config) into the worktree. Never link a
+  venv or `node_modules`; build them with the project's tool (`uv sync`, `npm ci`), and ask when
+  unclear. Recreate a symlinked `.supervisor` (`references/external-store.md`).
+  Check that the tests import the worktree's code (for Python,
+  `python -c 'import <pkg>; print(<pkg>.__file__)'`).
+- Read and tick a plan at the path the brief gives, not at its copy in the worktree.
+- Force-push and rebase of pushed commits stay gated by `git-safety`. A standing permission in the
+  repo's `AGENTS.md`/`CLAUDE.md` counts as the explicit user request for the branches it covers.
+  It never covers the default branch, which is force-pushed only when the user names it in the
+  brief.
+- Store changes: every commit in a project checkout, on any branch, also stages that checkout's
+  pending `.supervisor/` changes, except while resolving a conflict or for a git-excluded store
+  (`project-memory`, `references/external-store.md`). The report lists the store
+  paths committed.
+- Commits and PR descriptions carry only the `git-safety` trailer.
+
+## Sync With Origin
+
+In any repo, before any commit or merge into the default branch, run `git fetch origin` in its
+checkout. Skip the pull when there is no `origin` remote, it has no
+`<default>` branch, or `git merge-base --is-ancestor origin/<default> HEAD` succeeds. If
+`git branch -r --contains <c>` lists another remote for a commit `<c>` in `origin/<default>..HEAD`,
+stop and report (`git-safety` gate). Otherwise run `git pull --rebase --autostash origin <default>`
+and stage after it (`--autostash` may unstage). On a conflict, follow `git-safety` (Conflicts).
+Push several remotes in one step, `origin` first; if origin rejects, push nowhere else; report.
+
+## Landing A Work Branch
+
+When the task is done and its checks pass, the lead lands the branch it cut, locally. Nothing else
+merges into the default branch unless asked; a requested merge of any branch, including a
+user-made worktree's, follows steps 2-5.
+
+A plan's branch lands only after its `curator` close-out runs on the branch, so the squash carries
+the store changes; until then the lead leaves it ready and reports.
+
+1. Commit the change set on the branch, including the worktree's store changes (`git-safety`
+   Commits).
+2. In the worktree, `git rebase <default>`, then rerun the checks. On a conflict, follow
+   `git-safety` (Conflicts).
+3. Find the checkout that has the default branch checked out (`git worktree list`). If there is
+   none, or the harness refuses commands against it, follow
+   `references/landing-from-worktree.md`. If it has staged changes outside
+   `.supervisor/` or an operation in progress, or git fails on a `.lock` file, wait a minute and
+   retry from step 2, at most three times, then stop, leaving the branch ready, and report.
+   There, sync with origin (Sync With Origin). If
+   `git merge-base --is-ancestor <default> <branch>` fails, go back to step 2.
+4. There, `git merge --squash <branch>`; if git refuses because it would overwrite uncommitted
+   changes only under `.supervisor/`, commit those first with `git add .supervisor` and
+   `git commit -m "chore(memory): <what>" -- .supervisor` (no `VERSION` bump), then go back to
+   step 2; if it names other paths, stop: leave the branch ready
+   and report. Otherwise `git add .supervisor` (tracked store), so
+   this checkout's pending store changes join the squash. Bump `VERSION` if the repo uses
+   the `X.y` scheme and the change set touches a versioned path, run the checks, and commit once
+   `git diff --cached --quiet <branch> -- . ':!VERSION'` (add `':!.supervisor'` when the commit
+   takes those store changes) confirms the staged tree is the branch. Unrelated
+   uncommitted changes stay out of the commit. If the checks or that test fail, do not commit;
+   report, leave the squash staged, and stop (keep the worktree and branch). Never move
+   the default branch with `update-ref` or `branch -f`.
+5. `git worktree remove <path>` without `--force` (if it refuses, keep it; report). Once
+   `git diff --quiet HEAD <branch> -- . ':!VERSION'` (with `':!.supervisor'` as in step 4)
+   confirms the commit holds the branch, delete it with `git branch -D`; this default is the user's
+   request for that deletion.
+6. Never push, except the fast-forward push in the worktree landing.
+   Report the worktree, branch, and squash commit or why it did not merge.
+
+## Checks
+
+- Run the checks the brief, `AGENTS.md`/`CLAUDE.md` or README names (tests, lint, type checks, a
+  build), else the cheapest meaningful one (a compile, `--help`, a sample run).
