@@ -1,0 +1,6 @@
+{
+  "name": "pi-supervisor-test",
+  "private": true,
+  "keywords": ["pi-package"],
+  "pi": { "extensions": ["./extensions/supervisor/index.ts"], "skills": ["./skills"] }
+}
