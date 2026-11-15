@@ -578,7 +578,7 @@ runs (two small tasks through real leads; expected 2 to 10 USD depending on the 
 - Owns: `package.json`, `CLAUDE.md`, `LICENSE`, `.gitignore`, `install`, `tests/test_install.py`
 - Deps: none
 - Stages: execute
-- Status: execute
+- Status: done
 - Artifacts: -
 
 ### P1: Dispatch core and nested proof
@@ -659,13 +659,15 @@ Waves: P0; then P1 and P5; then P2, P3 and P4; then P6 and P7.
 - 2026-11-15 decision: routing pass bar 24 of 28 for sign-off, target 28 of 28, every failure listed with a tuning follow-up (D24); source: user
 - 2026-11-15 decision: plan approved with the dedicated-launcher change; source: user
 - 2026-11-15 decision: create the private GitHub repo `sly2j/pi-supervisor`, add it as `origin`, push `main` in P0 and after each landed package (D25); source: user
+- 2026-11-15 P0: done; repo bootstrapped (commit 901f575), install and launcher with 16 tests passing, private repo sly2j/pi-supervisor created and main pushed; deferred: none (commit trailer is Supervisor for Pi per D22, the brief said Claude trailer; plan Todo ticks left uncommitted)
+- 2026-11-15 decision: this repository's own commits use the trailer `Co-Authored-By: Supervisor for Pi` (D22 and the repo CLAUDE.md); commit 901f575 stands, no history rewrite; source: supervisor
 
 ## Todo
 
-- [ ] P0: `git init -b main`; write `package.json` (D1), `CLAUDE.md` (D16 check commands, D18
+- [x] P0: `git init -b main`; write `package.json` (D1), `CLAUDE.md` (D16 check commands, D18
       versioning line, commit style with the D22 trailer), `LICENSE`, `.gitignore` (D25)
-- [ ] P0: write `install` (D20, D21) and `tests/test_install.py`; tests pass
-- [ ] P0: first commit with `.supervisor/`; `no_secrets` passes; `gh repo create
+- [x] P0: write `install` (D20, D21) and `tests/test_install.py`; tests pass
+- [x] P0: first commit with `.supervisor/`; `no_secrets` passes; `gh repo create
       sly2j/pi-supervisor --private`; add `origin`; push `main`
 - [ ] P1 1a: `agents.ts`, `tiers.ts`, `dispatch.ts`, `index.ts`, scripted-provider fixture;
       one restricted child end to end
