@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { after, test } from "node:test";
 import { spawnSync } from "node:child_process";
 import { criticChoices, criticOptions, installWeb, NO_CRITIC, proposeTiers } from "../../extensions/supervisor/setup.ts";
+import { editQuery, filterLabels } from "../../extensions/supervisor/picker.ts";
 import { PI, Sandbox } from "../fixtures/harness.ts";
 import { Rpc } from "../fixtures/rpc.ts";
 
@@ -65,9 +66,9 @@ test("propose_prefers_current: two providers, session on the smaller -> its mode
 	assert.equal(proposeTiers(ms).top, "a/2");
 });
 
-test("critic_choices: two providers -> only the other provider's models, dearest first", () => {
+test("critic_choices: all models kept, other providers first, dearest first", () => {
 	const ms = [model("a", "1", 1, 1), model("b", "x", 1, 1), model("b", "y", 3, 3)];
-	assert.deepEqual(criticChoices(ms, "a").map((m: any) => m.id), ["y", "x"]);
+	assert.deepEqual(criticChoices(ms, "a").map((m: any) => m.id), ["y", "x", "1"]);
 });
 
 test("critic_options: first run -> none first; re-run -> keep current first, not listed twice", () => {
@@ -208,4 +209,20 @@ test("wizard_rerun_keeps_critic: second provider, Accept, default pick -> critic
 	assert.equal(opts[0], "Keep anthropic/claude-haiku-4-5");
 	assert.equal(cfg(s).critic, "anthropic/claude-haiku-4-5");
 	assert.equal(r.unexpected.length, 0, JSON.stringify(r.unexpected));
+});
+
+test("filter_labels: case-insensitive, all words must match, empty keeps all", () => {
+	const ls = ["argo/gpt-5  $1/$2", "anthropic/Claude-Opus  $5/$25", "openai/gpt-5  $1/$2"];
+	assert.deepEqual(filterLabels(ls, ""), ls);
+	assert.deepEqual(filterLabels(ls, "ARGO"), [ls[0]]);
+	assert.deepEqual(filterLabels(ls, "gpt 5"), [ls[0], ls[2]]);
+	assert.deepEqual(filterLabels(ls, "zzz"), []);
+});
+
+test("edit_query: printable appends, backspace deletes, escape sequences ignored", () => {
+	assert.equal(editQuery("ar", "g"), "arg");
+	assert.equal(editQuery("arg", "\x7f"), "ar");
+	assert.equal(editQuery("", "\x7f"), "");
+	assert.equal(editQuery("a", "\x1b[A"), "a");
+	assert.equal(editQuery("a", "\r"), "a");
 });

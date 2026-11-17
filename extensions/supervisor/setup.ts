@@ -10,6 +10,7 @@ import { show } from "./commands.ts";
 import { formatChecks, runChecks } from "./doctor.ts";
 import type { Invocation } from "./dispatch.ts";
 import { ENTRY, type Persona, parseModelRef, personaState } from "./persona.ts";
+import { pickLabel } from "./picker.ts";
 import { type Config, CONFIG_FILE, loadConfig } from "./tiers.ts";
 
 export type TierMap = Record<Tier, string>;
@@ -56,9 +57,10 @@ export function proposeTiers(models: Model<Api>[], preferProvider?: string): Tie
 	return Object.fromEntries(TIERS.map((t, i) => [t, ref(mine[Math.round((i * (n - 1)) / 3)])])) as TierMap;
 }
 
-// Available models of other providers, dearest first; the first is the default highlight.
+// Every available model, other providers' first (a second family catches different mistakes), dearest first.
 export function criticChoices(models: Model<Api>[], topProvider: string): Model<Api>[] {
-	return models.filter((m) => m.provider !== topProvider).sort(byPrice);
+	const other = (m: Model<Api>) => (m.provider === topProvider ? 1 : 0);
+	return [...models].sort((a, b) => other(a) - other(b) || byPrice(a, b));
 }
 
 export const NO_CRITIC = "None: the critic agent uses its tier";
@@ -196,7 +198,7 @@ export function registerSetup(pi: ExtensionAPI, d: SetupDeps): void {
 			}
 			const tier = pick.slice("Change ".length) as Tier;
 			const sorted = [...avail].sort(byPrice);
-			const m = await ui.select(`Model for ${tier} (${ROLES[tier]})`, sorted.map(label));
+			const m = await pickLabel(ctx, `Model for ${tier} (${ROLES[tier]})`, sorted.map(label));
 			if (m === undefined) return cancelled();
 			tiers = { ...tiers, [tier]: ref(sorted[sorted.map(label).indexOf(m)]) };
 		}
@@ -206,7 +208,8 @@ export function registerSetup(pi: ExtensionAPI, d: SetupDeps): void {
 		const others = criticChoices(avail, parseModelRef(tiers.top).provider);
 		if (providers.length > 1 && others.length > 0) {
 			const opts = criticOptions(others.map((m) => ({ label: label(m), value: ref(m) })), critic);
-			const c = await ui.select(
+			const c = await pickLabel(
+				ctx,
 				"Critic model\nReview with a model from another provider than the top tier? A second model family catches different mistakes.",
 				opts.map((o) => o.label),
 			);
