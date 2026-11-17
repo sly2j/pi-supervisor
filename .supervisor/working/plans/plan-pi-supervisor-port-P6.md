@@ -407,4 +407,4 @@ User checklist (your real launcher; about 10 minutes, about 0.20 USD of subscrip
 - [x] S5: agent TUI run in tmux (stage E); clean up the socket and profile
 - [x] S5: `docs/parity.md` with verdict, capability rows, routing table, evidence, differences
 - [x] S5: `parity_rows_complete`; `python3 -m pytest -q` and `node --test` pass
-- [ ] User checklist run; result added to `docs/parity.md` section 4
+- [x] User checklist run; result added to `docs/parity.md` section 4

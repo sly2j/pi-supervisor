@@ -638,7 +638,7 @@ thresholds are P6-D9's table in `.supervisor/working/plans/plan-pi-supervisor-po
   routed agents' `description:` lines
 - Deps: P2, P3, P4, P5
 - Stages: plan, execute
-- Status: blocked: execute: owner checklist (docs/parity.md section 4) is the user's to run
+- Status: done
 - Artifacts: `.supervisor/working/plans/plan-pi-supervisor-port-P6.md`
 
 ### P7: Docs
@@ -694,6 +694,8 @@ None here. The P6 model usage question is open question 1 of
 - 2026-11-15 P6: e2e_mode1 re-run pass after restoring the dispatch `model` "if omitted, own tier" sentence (0.27 USD); stage E TUI run passes steps 1-7, update and uninstall (0.07 USD); parity provisional pass, landed d5da2bd and pushed; deferred: owner checklist (owner action), closing-notification-after-reload follow-up (P2 UX, out of P6 scope)
 - 2026-11-15 lead: setup summary now shown once after the reload via a pending session entry delivered at session_start (a8d4b6a, pushed); deferred: nothing beyond a TUI check of the redraw and failed-reload behaviour
 - 2026-11-15 decision: the setup closing message being wiped by the reload is fixed now rather than left as a follow-up, as part of the user's request for an easy setup; source: supervisor
+- decision: owner checklist (docs/parity.md section 4) passed, user 2026-11-17: "test passed, all looking good"
+- 2026-11-17 decision: package.json version bumped 0.1.0 to 1.0.0 at parity sign-off; no other file states 0.1.0; source: user
 
 ## Todo
 

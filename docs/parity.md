@@ -2,10 +2,10 @@
 
 ## 1. Verdict
 
-**Provisional pass; owner checklist pending** (2026-11-15). Stages A to E are run: the cross
+**Pass** (2026-11-15; owner checklist passed 2026-11-17). Stages A to E are run: the cross
 lint passes, routing scores 28 of 28 after one tuning round, `e2e_mode1` (re-run) and
 `e2e_mode2` pass, and the agent TUI run passes steps 1 to 7 (section 4). No rule below holds
-1.0.0 on these results. The verdict becomes final when the owner checklist (section 4) passes.
+1.0.0 on these results.
 
 Sign-off rules (P6-D15, parity bar D24: 24 of 28 routing cases to sign off, 28 as target):
 
@@ -178,24 +178,32 @@ watcher (1 USD, 900 s) never fired.
 
 The tmux server was killed and the temporary directories removed afterwards.
 
-Owner checklist (pending; your real install, about 10 minutes and a few cents of subscription
-quota). Report any step that differs:
+Owner checklist (passed, owner, 2026-11-17; your real install, about 10 minutes and a few cents of
+subscription quota). Report any step that differs:
 
 1. In the clone, run `./install`. It creates `~/.config/pi-supervisor` and
    `~/.local/bin/pi-supervisor`, records your choices in `.install.conf`, and prints the PATH line
    if needed.
+   **Pass** (owner, 2026-11-17).
 2. In a scratch git repo whose `README.md` holds the typo `recieve`, run `pi-supervisor`. The
    editor shows `/supervisor-config`; press Enter.
+   **Pass** (owner, 2026-11-17).
 3. Read the tier proposal (four lines with roles and prices) and accept it. Answer the critic
    question if it appears (no is fine), and answer yes to the web tools.
+   **Pass** (owner, 2026-11-17).
 4. After the reload, note which messages you saw, and check that the status line reads
    `supervisor on · top ...`.
+   **Pass** (owner, 2026-11-17).
 5. Type "Fix the typo 'recieve' in README.md." It should dispatch `fixer`, and the file should be
    fixed.
+   **Pass** (owner, 2026-11-17).
 6. `/supervisor off`: the status line changes; `/supervisor on` turns it back.
+   **Pass** (owner, 2026-11-17).
 7. Quit, then run `pi-supervisor update`: it pulls the clone, re-installs without asking and
    updates the pi packages.
+   **Pass** (owner, 2026-11-17).
 8. Run plain `pi` once: it starts as before, without the supervisor.
+   **Pass** (owner, 2026-11-17).
 
 ## 5. Known differences and observations
 
