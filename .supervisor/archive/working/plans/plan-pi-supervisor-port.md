@@ -715,10 +715,10 @@ None here. The P6 model usage question is open question 1 of
 - [x] P3: copy and adapt 15 agents by D12; write `tests/test_agents_lint.py`
 - [x] P4: copy and adapt 16 skills and their support files by D12; write
       `tests/test_skills_lint.py`
-- [ ] P6: child plan, then execute (cross lint, routing test, end-to-end runs,
+- [x] P6: child plan, then execute (cross lint, routing test, end-to-end runs,
       `docs/parity.md`)
 - [x] P7: write `README.md` and `docs/`
-- [ ] After each package lands: push `main` to `origin` (D25)
-- [ ] Verification: temporary-profile install and full check; uninstall leaves `~/.pi/agent`
+- [x] After each package lands: push `main` to `origin` (D25)
+- [x] Verification: temporary-profile install and full check; uninstall leaves `~/.pi/agent`
       unchanged; set version `1.0.0`; push
-- [ ] Close-out: `curator` close-out of this plan
+- [x] Close-out: `curator` close-out of this plan
