@@ -11,3 +11,4 @@ Goal: make the close-out paragraph of docs/workflow-lifecycle.md agree with the 
 Scope: the sentence about who commits memory changes and what close-out does; wording only.
 Done when: the user has decided the wording and both repos agree.
 Notes: the sentence is upstream-inherited; the fix is the user's call. Plan: .supervisor/archive/working/plans/plan-pi-supervisor-port.md.
+dropped: 2026-11-17
