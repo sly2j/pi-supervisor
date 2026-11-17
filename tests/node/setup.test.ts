@@ -66,14 +66,17 @@ test("propose_prefers_current: two providers, session on the smaller -> its mode
 	assert.equal(proposeTiers(ms).top, "a/2");
 });
 
-test("critic_choices: all models kept, other providers first, dearest first", () => {
+test("critic_choices: all models kept; other provider, then other family, then same; dearest first", () => {
 	const ms = [model("a", "1", 1, 1), model("b", "x", 1, 1), model("b", "y", 3, 3)];
-	assert.deepEqual(criticChoices(ms, "a").map((m: any) => m.id), ["y", "x", "1"]);
+	assert.deepEqual(criticChoices(ms, { provider: "a", id: "1" }).map((m: any) => m.id), ["y", "x", "1"]);
+	const one = [model("p", "claude-opus-4", 5, 5), model("p", "claude-haiku-4", 1, 1), model("p", "gpt-5", 2, 2), model("p", "o3", 3, 3)];
+	assert.deepEqual(criticChoices(one, { provider: "p", id: "claude-opus-4" }).map((m: any) => m.id), ["o3", "gpt-5", "claude-opus-4", "claude-haiku-4"]);
+	assert.deepEqual(criticChoices(one.slice(0, 2), { provider: "p", id: "claude-opus-4" }).map((m: any) => m.id), ["claude-opus-4", "claude-haiku-4"]);
 });
 
-test("critic_options: first run -> none first; re-run -> keep current first, not listed twice", () => {
+test("critic_options: first run -> default model first, then none; re-run -> keep current first, not listed twice", () => {
 	const ms = [{ label: "b/y  $3/$3 per M", value: "b/y" }, { label: "b/x  $1/$1 per M", value: "b/x" }];
-	assert.deepEqual(criticOptions(ms, null).map((o) => o.value), [null, "b/y", "b/x"]);
+	assert.deepEqual(criticOptions(ms, null).map((o) => o.value), ["b/y", null, "b/x"]);
 	const re = criticOptions(ms, "b/x");
 	assert.deepEqual(re.map((o) => o.value), ["b/x", null, "b/y"]);
 	assert.equal(re[0].label, "Keep b/x");
@@ -93,8 +96,11 @@ test("no_models: no provider with credentials -> error notify with /login hint, 
 });
 
 // The wizard proposal on the scripted provider; any dialog not queued by a test is a failure.
-const wizard = (r: Rpc, ...steps: ["select" | "confirm", RegExp | undefined, object][]) =>
+// The critic prompt is always asked; these tests answer None unless they queue their own.
+const wizard = (r: Rpc, ...steps: ["select" | "confirm", RegExp | undefined, object][]) => {
 	steps.forEach(([m, t, reply]) => r.answer(m, t, reply));
+	r.answer("select", /Critic model/, { value: NO_CRITIC });
+};
 
 test("wizard_writes_config: Accept, no critic, no web -> file, reload, persona on", { skip }, async () => {
 	const s = box();
@@ -203,7 +209,8 @@ test("wizard_rerun_keeps_critic: second provider, Accept, default pick -> critic
 	const r = new Rpc(s, { model: "scripted/strong", env: { ANTHROPIC_API_KEY: "dummy-test-key" } });
 	rpcs.push(r);
 	let opts: string[] = [];
-	wizard(r, ["select", /Supervisor models/, { value: "Accept" }], ["confirm", /Web tools/, { confirmed: false }]);
+	r.answer("select", /Supervisor models/, { value: "Accept" });
+	r.answer("confirm", /Web tools/, { confirmed: false });
 	r.answer("select", /Critic model/, (req) => ((opts = req.options), { value: req.options[0] }));
 	await r.prompt("/supervisor-config");
 	assert.equal(opts[0], "Keep anthropic/claude-haiku-4-5");

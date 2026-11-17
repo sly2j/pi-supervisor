@@ -57,19 +57,24 @@ export function proposeTiers(models: Model<Api>[], preferProvider?: string): Tie
 	return Object.fromEntries(TIERS.map((t, i) => [t, ref(mine[Math.round((i * (n - 1)) / 3)])])) as TierMap;
 }
 
-// Every available model, other providers' first (a second family catches different mistakes), dearest first.
-export function criticChoices(models: Model<Api>[], topProvider: string): Model<Api>[] {
-	const other = (m: Model<Api>) => (m.provider === topProvider ? 1 : 0);
-	return [...models].sort((a, b) => other(a) - other(b) || byPrice(a, b));
+// Model family: the id up to its first dash, dot, colon or digit ("claude-opus-4" -> "claude").
+const family = (m: Model<Api>) => m.id.split(/[-._:\d]/)[0];
+
+// Every available model; the first is the default: another provider than the top tier's, else
+// another family, else the dearest. Within a rank, dearest first.
+export function criticChoices(models: Model<Api>[], top: { provider: string; id: string }): Model<Api>[] {
+	const topFamily = top.id.split(/[-._:\d]/)[0];
+	const rank = (m: Model<Api>) => (m.provider !== top.provider ? 0 : family(m) !== topFamily ? 1 : 2);
+	return [...models].sort((a, b) => rank(a) - rank(b) || byPrice(a, b));
 }
 
 export const NO_CRITIC = "None: the critic agent uses its tier";
 
-// Critic picks: the current one first ("Keep"), then none, then the other providers' models.
+// Critic picks: the current one first ("Keep"), else the default model; then none, then the rest.
 type Option = { label: string; value: string | null };
 export function criticOptions(models: Option[], current: string | null): Option[] {
-	const keep = current ? [{ label: `Keep ${current}`, value: current }] : [];
-	return [...keep, { label: NO_CRITIC, value: null }, ...models.filter((m) => m.value !== current)];
+	const first = current ? { label: `Keep ${current}`, value: current } : models[0];
+	return [...(first ? [first] : []), { label: NO_CRITIC, value: null }, ...models.filter((m) => m.value !== first?.value)];
 }
 
 // Four lines (tier, model, price, roles) and a note when tiers share a model. A model that is not
@@ -205,12 +210,12 @@ export function registerSetup(pi: ExtensionAPI, d: SetupDeps): void {
 
 		// A re-run offers the current critic first; Escape cancels, as in every other step.
 		let critic = existing && !(existing instanceof Error) ? existing.critic : null;
-		const others = criticChoices(avail, parseModelRef(tiers.top).provider);
-		if (providers.length > 1 && others.length > 0) {
+		const others = criticChoices(avail, parseModelRef(tiers.top));
+		if (others.length > 0) {
 			const opts = criticOptions(others.map((m) => ({ label: label(m), value: ref(m) })), critic);
 			const c = await pickLabel(
 				ctx,
-				"Critic model\nReview with a model from another provider than the top tier? A second model family catches different mistakes.",
+				"Critic model\nReview with a different model family than the top tier? A second family catches different mistakes. The first choice is the suggested default.",
 				opts.map((o) => o.label),
 			);
 			if (c === undefined) return cancelled();
